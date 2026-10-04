@@ -25,6 +25,11 @@
     "allow-show-database-folder",
     "allow-show-log-folder",
     "allow-set-tray-timer",
-    "allow-ensure-on-screen"
+    "allow-ensure-on-screen",
+    "core:window:allow-destroy",
+    "core:window:allow-hide",
+    "core:window:allow-show",
+    "core:window:allow-unminimize",
+    "core:window:allow-set-focus"
   ]
 }
