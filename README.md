@@ -48,15 +48,16 @@ Type a task in the sidebar field. `call mom tomorrow 9am` sets the title, the da
 
 ## Install
 
-The Linux package is a `.deb` (and an AppImage from the same build). On Debian, Ubuntu, or Linux Mint:
+The `.deb` for Debian, Ubuntu, and Linux Mint is attached to the [0.1.0 release](https://github.com/dj-secq/layp/releases/tag/v0.1.0).
 
 ```sh
+curl -LO https://github.com/dj-secq/layp/releases/download/v0.1.0/Layp_0.1.0_amd64.deb
 sudo apt install ./Layp_0.1.0_amd64.deb
 ```
 
-The package is section `utils`, priority `optional`. The desktop entry is a Productivity app. Its keywords are tasks, planner, calendar, journal, todo, and focus, so it shows up in the app menu under those words.
+Installing it adds Layp to the app menu. The package is section `utils`, priority `optional`. The desktop entry is a Productivity app. Its keywords are tasks, planner, calendar, journal, todo, and focus.
 
-Build it from this repo:
+Build the package from this repo:
 
 ```sh
 cd app
