@@ -28,13 +28,28 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["deb", "appimage"],
+    "publisher": "dj-secq",
+    "homepage": "https://github.com/dj-secq/layp",
+    "copyright": "Copyright (c) 2026 dj-secq",
+    "license": "MIT",
+    "licenseFile": "../../LICENSE",
+    "category": "Productivity",
+    "shortDescription": "Local tasks and a day record",
+    "longDescription": "Layp is a desktop planner. Tasks, a calendar, and a day record stay in one SQLite file on this computer.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "linux": {
+      "deb": {
+        "section": "utils",
+        "priority": "optional",
+        "desktopTemplate": "layp.desktop.hbs"
+      }
+    }
   }
 }

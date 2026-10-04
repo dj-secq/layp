@@ -1,7 +1,11 @@
 [package]
 name = "layp"
 version = "0.1.0"
-description = "Layp, a local desktop app for tasks and a day record"
+description = "Local desktop app for tasks and a day record"
+authors = ["dj-secq"]
+license = "MIT"
+repository = "https://github.com/dj-secq/layp"
+homepage = "https://github.com/dj-secq/layp"
 edition = "2021"
 
 [lib]

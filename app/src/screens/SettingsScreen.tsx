@@ -1,3 +1,4 @@
+import { getVersion } from "@tauri-apps/api/app";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { useEffect, useState } from "react";
 import { Button } from "../components/Button";
@@ -203,8 +204,24 @@ export function SettingsScreen() {
           />
         </div>
       </section>
+
+      <AboutLayp />
       </div>
     </>
+  );
+}
+
+function AboutLayp() {
+  const [version, setVersion] = useState("0.1.0");
+  useEffect(() => {
+    void getVersion().then(setVersion).catch(() => undefined);
+  }, []);
+  return (
+    <section className="settings-group">
+      <h2 className="page-title">About</h2>
+      <p>Layp {version}</p>
+      <p>Local tasks and a day record, kept in one file on this computer. MIT License.</p>
+    </section>
   );
 }
 

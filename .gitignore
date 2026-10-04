@@ -7,9 +7,11 @@ target/
 # Tauri regenerates these for capability autocomplete
 app/src-tauri/gen/schemas/
 
-# Plans, notes, and agent instructions stay on this machine
+# Plans, notes, and agent instructions stay on this machine.
+# The public README is the exception.
 /plan/
 *.md
+!/README.md
 AGENTS.md
 CLAUDE.md
 GEMINI.md
