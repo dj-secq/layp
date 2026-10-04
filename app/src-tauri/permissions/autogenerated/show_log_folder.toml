@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-show-log-folder"
+description = "Enables the show_log_folder command without any pre-configured scope."
+commands.allow = ["show_log_folder"]
+
+[[permission]]
+identifier = "deny-show-log-folder"
+description = "Denies the show_log_folder command without any pre-configured scope."
+commands.deny = ["show_log_folder"]

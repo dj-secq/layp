@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-present-attachment-ids"
+description = "Enables the present_attachment_ids command without any pre-configured scope."
+commands.allow = ["present_attachment_ids"]
+
+[[permission]]
+identifier = "deny-present-attachment-ids"
+description = "Denies the present_attachment_ids command without any pre-configured scope."
+commands.deny = ["present_attachment_ids"]

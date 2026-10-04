@@ -1,0 +1,44 @@
+[package]
+name = "layp"
+version = "0.1.0"
+description = "Layp, a local desktop app for tasks and a day record"
+edition = "2021"
+
+[lib]
+name = "layp_lib"
+# rlib is the desktop library. staticlib and cdylib are for mobile and
+# were writing a ~1 GB archive and a second shared library on every build.
+crate-type = ["rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+log = "0.4"
+notify-rust = "4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri-plugin-dialog = "2"
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-log = "2"
+tauri-plugin-notification = "2"
+tauri-plugin-single-instance = "2"
+tauri-plugin-sql = { version = "2", features = ["sqlite"] }
+tauri-plugin-window-state = "2"
+zip = { version = "2.2", default-features = false, features = ["deflate"] }
+
+[profile.dev]
+# Keep file and line numbers for Layp. Full variable debug info is what
+# makes the GTK and WebKit libraries fill target/.
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true

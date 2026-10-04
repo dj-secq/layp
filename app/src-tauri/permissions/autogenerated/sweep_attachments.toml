@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-sweep-attachments"
+description = "Enables the sweep_attachments command without any pre-configured scope."
+commands.allow = ["sweep_attachments"]
+
+[[permission]]
+identifier = "deny-sweep-attachments"
+description = "Denies the sweep_attachments command without any pre-configured scope."
+commands.deny = ["sweep_attachments"]

@@ -1,0 +1,30 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capability for the main window",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "sql:default",
+    "sql:allow-execute",
+    "log:default",
+    "notification:default",
+    "dialog:default",
+    "global-shortcut:default",
+    "allow-database-file",
+    "allow-show-reminder",
+    "allow-export-backup",
+    "allow-export-zip",
+    "allow-check-backup",
+    "allow-import-backup",
+    "allow-copy-attachment",
+    "allow-open-attachment",
+    "allow-delete-attachment-files",
+    "allow-present-attachment-ids",
+    "allow-sweep-attachments",
+    "allow-show-database-folder",
+    "allow-show-log-folder",
+    "allow-set-tray-timer",
+    "allow-ensure-on-screen"
+  ]
+}

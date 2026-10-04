@@ -1,0 +1,57 @@
+# Dependencies and build output
+node_modules/
+dist/
+dist-ssr/
+target/
+
+# Tauri regenerates these for capability autocomplete
+app/src-tauri/gen/schemas/
+
+# Plans, notes, and agent instructions stay on this machine
+/plan/
+*.md
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+CODEX.md
+.cursorrules
+.cursor/
+.claude/
+.grok/
+.agents/
+.codex/
+
+# Default mobile and Windows Store icons. The desktop set stays.
+app/src-tauri/icons/android/
+app/src-tauri/icons/ios/
+app/src-tauri/icons/Square*.png
+app/src-tauri/icons/StoreLogo.png
+
+# Logs and local config
+logs/
+*.log
+*.local
+.env
+.env.*
+!.env.example
+
+# Local databases dropped into the tree
+*.sqlite
+*.sqlite3
+*.db
+
+# TypeScript and Rust scratch
+*.tsbuildinfo
+**/*.rs.bk
+
+# Editors and OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.swp
