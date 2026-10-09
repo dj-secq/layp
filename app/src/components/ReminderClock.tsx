@@ -5,7 +5,7 @@ import { Temporal } from "temporal-polyfill";
 import { logFailure } from "../db/client";
 import { loadUnfiredChecklistReminders, loadUnfiredReminders, markFired } from "../db/reminders";
 import { showReminder } from "../desktop/notify";
-import { missedSummary, scheduleReminders, splitByHorizon, type ScheduledReminder } from "../lib/remind";
+import { missedSummary, scheduleReminders, splitByHorizon, type ScheduledReminder } from "@layp/shared";
 import { useApp } from "../state/AppState";
 
 const POLL_MS = 60_000;

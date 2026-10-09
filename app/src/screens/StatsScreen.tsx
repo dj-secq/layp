@@ -3,10 +3,10 @@ import { Temporal } from "temporal-polyfill";
 import { sessionsBetween } from "../db/focus";
 import { completedInstants } from "../db/tasks";
 import { daysBetween, loadTrackers, logsBetween, type DaySnap, type Tracker, type TrackerLog } from "../db/trackers";
-import { averageSleep, isSuccess, sumMinutes, type TrackerKind } from "../lib/journal";
-import { civilDay, countsByDay, dayReading, daysAround, sumByDay, trackerRate, trackerTone, type DayReading, type TrackerTone } from "../lib/stats";
-import { formatHours } from "../lib/sleep";
-import { MOOD_COLORS } from "../lib/stickers";
+import { averageSleep, isSuccess, sumMinutes, type TrackerKind } from "@layp/shared";
+import { civilDay, countsByDay, dayReading, daysAround, sumByDay, trackerRate, trackerTone, type DayReading, type TrackerTone } from "@layp/shared";
+import { formatHours } from "@layp/shared";
+import { MOOD_COLORS } from "@layp/shared";
 import { Skeleton, useViewLoad } from "../components/Skeleton";
 import { useApp } from "../state/AppState";
 

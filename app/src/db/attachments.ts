@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { deleteAttachmentFiles, presentAttachmentIds, sweepAttachments } from "../desktop/files";
-import { attachmentBlock, fileTitle } from "../lib/attachments";
-import { nowIso } from "../lib/clock";
-import { logFailure, query, run } from "./client";
+import { attachmentBlock, fileTitle } from "@layp/shared";
+import { logFailure, query, withStamp, writeStamped } from "./client";
+import { recordDeletion } from "./deletions";
 import type { SaveResult } from "./types";
 
 const count = z.union([z.number(), z.string()]).transform((value) => Number(value));
@@ -44,11 +44,13 @@ export async function addAttachment(taskId: string, sourcePath: string, byteSize
   const block = attachmentBlock(existing.length);
   if (block) return { status: "error", message: block };
   try {
-    await run(
-      `INSERT INTO attachments (id, task_id, file_name, byte_size, created_at) VALUES ($1, $2, $3, $4, $5)`,
-      [id, taskId, fileName, byteSize, nowIso()],
-    );
-    return { status: "saved", row: { id, fileName, byteSize, createdAt: nowIso(), missing: false } };
+    const { stamp } = await writeStamped((stamp) => [
+      {
+        sql: `INSERT INTO attachments (id, task_id, file_name, byte_size, created_at) VALUES ($1, $2, $3, $4, $5)`,
+        values: [id, taskId, fileName, byteSize, stamp],
+      },
+    ]);
+    return { status: "saved", row: { id, fileName, byteSize, createdAt: stamp, missing: false } };
   } catch {
     await deleteAttachmentFiles([id]).catch(() => undefined);
     await logFailure("attachment failed");
@@ -57,9 +59,14 @@ export async function addAttachment(taskId: string, sourcePath: string, byteSize
 }
 
 export async function removeAttachment(id: string): Promise<SaveResult<{ id: string }>> {
+  const rows = await query<{ id: string }>(`SELECT id FROM attachments WHERE id = $1`, [id]);
+  if (rows.length === 0) return { status: "error", message: "Not saved" };
   try {
-    const affected = await run(`DELETE FROM attachments WHERE id = $1`, [id]);
-    if (affected === 0) return { status: "error", message: "Not saved" };
+    await withStamp(async (stamp, run) => {
+      await recordDeletion("attachments", id, stamp, run, [
+        { sql: `DELETE FROM attachments WHERE id = $1`, values: [id] },
+      ]);
+    });
     await deleteAttachmentFiles([id]);
     return { status: "saved", row: { id } };
   } catch {

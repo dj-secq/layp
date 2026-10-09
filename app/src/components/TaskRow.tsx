@@ -3,8 +3,8 @@ import { Check } from "lucide-react";
 import { useEffect, useState } from "react";
 import { directChildCounts } from "../db/tasks";
 import type { Task, TaskList } from "../db/types";
-import { formatClock, type ClockPreference } from "../lib/clock";
-import { formatShortDay } from "../lib/dates";
+import { formatClock, type ClockPreference } from "@layp/shared";
+import { formatShortDay } from "@layp/shared";
 import { useApp } from "../state/AppState";
 
 let cachedRevision = Number.NaN;

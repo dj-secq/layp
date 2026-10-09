@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { nowIso } from "../lib/clock";
-import { emptyRule, type FilterRule } from "../lib/planner";
-import { cleanListName } from "../lib/validate";
-import { logFailure, query, run } from "./client";
+import { emptyRule, type FilterRule } from "@layp/shared";
+import { cleanListName } from "@layp/shared";
+import { logFailure, query, withStamp, writeStamped } from "./client";
+import { recordDeletion } from "./deletions";
 import type { Priority, SaveResult } from "./types";
 
 const priority = z.enum(["none", "low", "medium", "high"]).nullable();
@@ -60,14 +60,15 @@ export async function createFilter(nameInput: string, rule: FilterRule): Promise
   const cleaned = cleanListName(nameInput);
   if ("error" in cleaned) return { status: "error", message: cleaned.error };
   const id = crypto.randomUUID();
-  const stamp = nowIso();
   try {
     const maxRows = await query<{ max_sort: number | null }>(`SELECT COALESCE(MAX(sort_order), 0) AS max_sort FROM filters`);
     const sortOrder = Number(maxRows[0]?.max_sort ?? 0) + 1;
-    await run(
-      `INSERT INTO filters (id, name, rule_json, sort_order, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $5)`,
-      [id, cleaned.name, JSON.stringify(rule), sortOrder, stamp],
-    );
+    await writeStamped((stamp) => [
+      {
+        sql: `INSERT INTO filters (id, name, rule_json, sort_order, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $5)`,
+        values: [id, cleaned.name, JSON.stringify(rule), sortOrder, stamp],
+      },
+    ]);
     return { status: "saved", row: { id, name: cleaned.name, rule, sortOrder } };
   } catch {
     await logFailure("filter save failed");
@@ -75,10 +76,42 @@ export async function createFilter(nameInput: string, rule: FilterRule): Promise
   }
 }
 
-export async function deleteFilter(id: string): Promise<SaveResult<{ id: string }>> {
+export async function updateFilter(filter: SavedFilter, nameInput: string, rule: FilterRule): Promise<SaveResult<SavedFilter>> {
+  const cleaned = cleanListName(nameInput);
+  if ("error" in cleaned) return { status: "error", message: cleaned.error };
   try {
-    const affected = await run(`DELETE FROM filters WHERE id = $1`, [id]);
-    if (affected === 0) return { status: "error", message: "Not saved" };
+    const { batches } = await writeStamped((stamp) => [
+      {
+        sql: `UPDATE filters SET name = $1, rule_json = $2, updated_at = $3 WHERE id = $4`,
+        values: [cleaned.name, JSON.stringify(rule), stamp, filter.id],
+      },
+    ]);
+    if ((batches[0]?.rowsAffected ?? 0) === 0) return { status: "error", message: "Not saved" };
+    return { status: "saved", row: { ...filter, name: cleaned.name, rule } };
+  } catch {
+    await logFailure("filter save failed");
+    return { status: "error", message: "Not saved" };
+  }
+}
+
+/** Stamps updated_at so a later sync can see the new order. */
+export async function reorderFilters(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  await writeStamped((stamp) =>
+    ids.map((id, index) => ({
+      sql: `UPDATE filters SET sort_order = $1, updated_at = $2 WHERE id = $3`,
+      values: [index, stamp, id],
+    })),
+  );
+}
+
+export async function deleteFilter(id: string): Promise<SaveResult<{ id: string }>> {
+  const rows = await query<{ id: string }>(`SELECT id FROM filters WHERE id = $1`, [id]);
+  if (rows.length === 0) return { status: "error", message: "Not saved" };
+  try {
+    await withStamp(async (stamp, run) => {
+      await recordDeletion("filters", id, stamp, run, [{ sql: `DELETE FROM filters WHERE id = $1`, values: [id] }]);
+    });
     return { status: "saved", row: { id } };
   } catch {
     await logFailure("filter save failed");

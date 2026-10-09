@@ -1,3 +1,4 @@
+import { listen } from "@tauri-apps/api/event";
 import {
   createContext,
   useContext,
@@ -7,11 +8,15 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { failureText } from "../desktop/backup";
+import { phoneKick, phoneSetEnabled } from "../desktop/phone";
 import { sweepStoredFiles } from "../db/attachments";
+import { logFailure } from "../db/client";
 import { loadLists, loadSections } from "../db/lists";
 import { saveSetting } from "../db/settings";
+import { acceptPush, clearPairedPhone, storePairedPhone } from "../db/sync";
 import type { Section, Settings, TaskList } from "../db/types";
-import { addDays, todayIso } from "../lib/dates";
+import { addDays, todayIso } from "@layp/shared";
 
 export type NotificationPermission = "unknown" | "granted" | "denied";
 
@@ -53,6 +58,8 @@ type AppValue = {
   helpOpen: boolean;
   layers: number;
   notificationPermission: NotificationPermission;
+  phoneError: string | null;
+  setPhoneError: (message: string | null) => void;
   goToday: (date?: string) => void;
   goList: (listId: string) => void;
   goSettings: () => void;
@@ -123,17 +130,22 @@ export function AppProvider({
   const [layers, setLayers] = useState(0);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>("unknown");
   const [boardListId, setBoardListId] = useState<string | null>(null);
+  const [phoneError, setPhoneError] = useState<string | null>(null);
   const screen = useRef<ScreenActions>({ taskIds: [], toggleTask() {} });
   const routeRef = useRef(route);
   const cursorRef = useRef(cursorId);
   const todayRef = useRef(civilToday);
   const layersRef = useRef(0);
   const openTaskRef = useRef(openTaskId);
+  const settingsRef = useRef(settings);
+  const bumpRef = useRef<() => void>(() => undefined);
+  const refreshRef = useRef<() => Promise<void>>(async () => undefined);
   routeRef.current = route;
   cursorRef.current = cursorId;
   todayRef.current = civilToday;
   layersRef.current = layers;
   openTaskRef.current = openTaskId;
+  settingsRef.current = settings;
 
   useEffect(() => {
     document.documentElement.dataset.theme = settings.theme;
@@ -141,6 +153,65 @@ export function AppProvider({
 
   useEffect(() => {
     void sweepStoredFiles().catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    let cancel = false;
+    const stops: Array<() => void> = [];
+    void (async () => {
+      const stopPush = await listen("phone-push", (event) => {
+        acceptPush(event.payload);
+      });
+      if (cancel) {
+        stopPush();
+        return;
+      }
+      stops.push(stopPush);
+      const stopPaired = await listen<{ name: string; keyHash: string; pairedAt: string }>("phone-paired", (event) => {
+        void storePairedPhone(event.payload)
+          .then(() => bumpRef.current())
+          .catch(() => {
+            void logFailure("sync failed");
+          });
+      });
+      if (cancel) {
+        stopPaired();
+        return;
+      }
+      stops.push(stopPaired);
+      const stopForget = await listen("phone-forget", () => {
+        void clearPairedPhone()
+          .then(() => bumpRef.current())
+          .catch(() => {
+            void logFailure("sync failed");
+          });
+      });
+      if (cancel) {
+        stopForget();
+        return;
+      }
+      stops.push(stopForget);
+      const stopSync = await listen("phone-sync", () => {
+        bumpRef.current();
+        void refreshRef.current();
+      });
+      if (cancel) {
+        stopSync();
+        return;
+      }
+      stops.push(stopSync);
+      if (!settingsRef.current.phoneLink) return;
+      try {
+        await phoneSetEnabled(true);
+        if (!cancel) setPhoneError(null);
+      } catch (err) {
+        if (!cancel) setPhoneError(failureText(err, "Phone did not start."));
+      }
+    })();
+    return () => {
+      cancel = true;
+      for (const stop of stops) stop();
+    };
   }, []);
 
   useEffect(() => {
@@ -349,12 +420,10 @@ export function AppProvider({
       setCursorId,
       setHelpOpen,
       bump() {
-        setRevision((count) => count + 1);
+        bumpRef.current();
       },
       async refreshLists() {
-        const [nextLists, nextSections] = await Promise.all([loadLists(), loadSections()]);
-        setLists(nextLists);
-        setSections(nextSections);
+        await refreshRef.current();
       },
       async updateSettings(patch) {
         const previous = settings;
@@ -369,6 +438,7 @@ export function AppProvider({
           if (patch.pomoSoundBreak !== undefined) await saveSetting("pomoSoundBreak", patch.pomoSoundBreak);
           if (patch.closeBehavior) await saveSetting("closeBehavior", patch.closeBehavior);
           if (patch.quickAddShortcut !== undefined) await saveSetting("quickAddShortcut", patch.quickAddShortcut);
+          if (patch.phoneLink !== undefined) await saveSetting("phoneLink", patch.phoneLink ? "on" : "off");
         } catch (err) {
           setSettings(previous);
           throw err;
@@ -386,9 +456,21 @@ export function AppProvider({
       setNotificationPermission(next) {
         setNotificationPermission((current) => (current === next ? current : next));
       },
+      phoneError,
+      setPhoneError,
     }),
-    [settings, lists, sections, route, sidebarOpen, openTaskId, cursorId, revision, civilToday, helpOpen, layers, notificationPermission, boardListId, initial.dbPath],
+    [settings, lists, sections, route, sidebarOpen, openTaskId, cursorId, revision, civilToday, helpOpen, layers, notificationPermission, boardListId, phoneError, initial.dbPath],
   );
+
+  bumpRef.current = () => {
+    setRevision((count) => count + 1);
+    if (settingsRef.current.phoneLink) void phoneKick().catch(() => undefined);
+  };
+  refreshRef.current = async () => {
+    const [nextLists, nextSections] = await Promise.all([loadLists(), loadSections()]);
+    setLists(nextLists);
+    setSections(nextSections);
+  };
 
   return <Context.Provider value={value}>{children}</Context.Provider>;
 }

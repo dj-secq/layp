@@ -24,17 +24,19 @@ import {
   Timer,
 } from "lucide-react";
 import { Temporal } from "temporal-polyfill";
-import { createCountdown, deleteCountdown, loadCountdowns, type Countdown } from "../db/countdowns";
-import { createFilter, loadFilters, type SavedFilter } from "../db/filters";
+import { createCountdown, deleteCountdown, loadCountdowns, updateCountdown, type Countdown } from "../db/countdowns";
+import { createFilter, loadFilters, reorderFilters, updateFilter, type SavedFilter } from "../db/filters";
 import {
   archiveList,
   assignFolder,
   createFolder,
   createList,
   createSection,
+  deleteFolder,
   firstSectionId,
   loadFolders,
   recolorList,
+  renameFolder,
   renameList,
   reorderFolders,
   reorderLists,
@@ -43,9 +45,9 @@ import {
 import { loadTags, type Tag } from "../db/tags";
 import { createTask } from "../db/tasks";
 import type { Priority } from "../db/types";
-import { parseQuickAdd } from "../lib/parse";
-import { countdownLabel, emptyRule, movedIds, type FilterRule } from "../lib/planner";
-import { DEFAULT_LIST_COLOR, STICKERS, stickerName } from "../lib/stickers";
+import { parseQuickAdd } from "@layp/shared";
+import { countdownLabel, emptyRule, movedIds, type FilterRule } from "@layp/shared";
+import { DEFAULT_LIST_COLOR, STICKERS, stickerName } from "@layp/shared";
 import { useApp } from "../state/AppState";
 import { Button } from "./Button";
 import { Choice } from "./Choice";
@@ -166,8 +168,12 @@ export function Sidebar({ rail, narrow }: { rail: boolean; narrow: boolean }) {
   const [countdowns, setCountdowns] = useState<Countdown[]>([]);
   const [filters, setFilters] = useState<SavedFilter[]>([]);
   const [makingFilter, setMakingFilter] = useState(false);
+  const [editingFilter, setEditingFilter] = useState<SavedFilter | null>(null);
   const [makingFolder, setMakingFolder] = useState(false);
+  const [renamingFolder, setRenamingFolder] = useState<Folder | null>(null);
+  const [deletingFolder, setDeletingFolder] = useState<Folder | null>(null);
   const [makingCountdown, setMakingCountdown] = useState(false);
+  const [editingCountdown, setEditingCountdown] = useState<Countdown | null>(null);
   const [drawer, setDrawer] = useState(false);
   const [moreOpen, setMoreOpen] = useState(() => moreScreens.has(app.route.screen));
   const [countdownsOpen, setCountdownsOpen] = useState(false);
@@ -280,6 +286,17 @@ export function Sidebar({ rail, narrow }: { rail: boolean; narrow: boolean }) {
     );
     if (!next) return;
     await reorderFolders(next);
+    app.bump();
+  }
+
+  async function moveFilter(id: string, direction: -1 | 1) {
+    const next = movedIds(
+      filters.map((filter) => filter.id),
+      id,
+      direction,
+    );
+    if (!next) return;
+    await reorderFilters(next);
     app.bump();
   }
 
@@ -449,22 +466,30 @@ export function Sidebar({ rail, narrow }: { rail: boolean; narrow: boolean }) {
           const open = folder.id in folderOpen ? folderOpen[folder.id] : inFolder.length <= 3;
           return (
             <div key={folder.id} className="grid gap-1">
-              <div className="flex items-center gap-1">
+              <div className="grid gap-1">
                 <button
                   type="button"
-                  className="nav-row min-w-0 flex-1"
+                  className="nav-row min-w-0"
                   aria-expanded={open}
                   onClick={() => setFolderOpen((current) => ({ ...current, [folder.id]: !open }))}
                 >
                   {open ? <ChevronDown size={16} strokeWidth={1.75} aria-hidden /> : <ChevronRight size={16} strokeWidth={1.75} aria-hidden />}
                   <span className="truncate">{folder.name}</span>
                 </button>
-                <Button small aria-label={`Move ${folder.name} up`} onClick={() => void moveFolder(folder.id, -1)}>
-                  Up
-                </Button>
-                <Button small aria-label={`Move ${folder.name} down`} onClick={() => void moveFolder(folder.id, 1)}>
-                  Down
-                </Button>
+                <div className="flex flex-wrap gap-1">
+                  <Button small aria-label={`Move ${folder.name} up`} onClick={() => void moveFolder(folder.id, -1)}>
+                    Up
+                  </Button>
+                  <Button small aria-label={`Move ${folder.name} down`} onClick={() => void moveFolder(folder.id, 1)}>
+                    Down
+                  </Button>
+                  <Button small aria-label={`Rename ${folder.name}`} onClick={() => setRenamingFolder(folder)}>
+                    Rename
+                  </Button>
+                  <Button small aria-label={`Delete ${folder.name}`} onClick={() => setDeletingFolder(folder)}>
+                    Delete
+                  </Button>
+                </div>
               </div>
               {open
                 ? inFolder.map((list) => <ListLink key={list.id} id={list.id} folders={folders} onOpen={() => setDrawer(false)} />)
@@ -500,6 +525,16 @@ export function Sidebar({ rail, narrow }: { rail: boolean; narrow: boolean }) {
             </span>
             <Button
               small
+              aria-label={`Edit ${countdown.title}`}
+              onClick={() => {
+                setCountdownsOpen(true);
+                setEditingCountdown(countdown);
+              }}
+            >
+              Edit
+            </Button>
+            <Button
+              small
               aria-label={`Remove ${countdown.title}`}
               onClick={() => {
                 void deleteCountdown(countdown.id)
@@ -524,16 +559,40 @@ export function Sidebar({ rail, narrow }: { rail: boolean; narrow: boolean }) {
 
       <Disclosure label={`Filters ${filters.length}`} open={filtersOpen} onToggle={() => setFiltersOpen((open) => !open)}>
         {filters.length === 0 ? <p className="meta px-2">No saved filters.</p> : null}
-        {filters.map((filter) => (
-          <button
-            key={filter.id}
-            type="button"
-            className="nav-row"
-            aria-current={app.route.screen === "filter" && app.route.filterId === filter.id ? "page" : undefined}
-            onClick={() => leave(() => app.goFilter(filter.id))}
-          >
-            {filter.name}
-          </button>
+        {filters.map((filter, index) => (
+          <div key={filter.id} className="grid gap-1">
+            <button
+              type="button"
+              className="nav-row"
+              aria-current={app.route.screen === "filter" && app.route.filterId === filter.id ? "page" : undefined}
+              onClick={() => leave(() => app.goFilter(filter.id))}
+            >
+              <span className="truncate">{filter.name}</span>
+            </button>
+            <div className="flex flex-wrap gap-1">
+              <Button
+                small
+                aria-label={`Move ${filter.name} up`}
+                aria-disabled={index === 0}
+                disabled={index === 0}
+                onClick={() => void moveFilter(filter.id, -1)}
+              >
+                Up
+              </Button>
+              <Button
+                small
+                aria-label={`Move ${filter.name} down`}
+                aria-disabled={index === filters.length - 1}
+                disabled={index === filters.length - 1}
+                onClick={() => void moveFilter(filter.id, 1)}
+              >
+                Down
+              </Button>
+              <Button small aria-label={`Edit ${filter.name}`} onClick={() => setEditingFilter(filter)}>
+                Edit
+              </Button>
+            </div>
+          </div>
         ))}
         <Button
           variant="secondary"
@@ -611,8 +670,14 @@ export function Sidebar({ rail, narrow }: { rail: boolean; narrow: boolean }) {
       ) : null}
       {creating ? <NewListDialog onClose={() => setCreating(false)} /> : null}
       {makingFolder ? <FolderDialog onClose={() => setMakingFolder(false)} /> : null}
-      {makingCountdown ? <CountdownDialog onClose={() => setMakingCountdown(false)} /> : null}
-      {makingFilter ? <FilterDialog onClose={() => setMakingFilter(false)} /> : null}
+      {renamingFolder ? <RenameFolderDialog folder={renamingFolder} onClose={() => setRenamingFolder(null)} /> : null}
+      {deletingFolder ? <DeleteFolderDialog folder={deletingFolder} onClose={() => setDeletingFolder(null)} /> : null}
+      {makingCountdown ? <CountdownDialog initial={null} onClose={() => setMakingCountdown(false)} /> : null}
+      {editingCountdown ? (
+        <CountdownDialog initial={editingCountdown} onClose={() => setEditingCountdown(null)} />
+      ) : null}
+      {makingFilter ? <FilterDialog initial={null} onClose={() => setMakingFilter(false)} /> : null}
+      {editingFilter ? <FilterDialog initial={editingFilter} onClose={() => setEditingFilter(null)} /> : null}
     </>
   );
 }
@@ -828,39 +893,35 @@ function FolderDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
-function CountdownDialog({ onClose }: { onClose: () => void }) {
+function RenameFolderDialog({ folder, onClose }: { folder: Folder; onClose: () => void }) {
   const app = useApp();
-  const [title, setTitle] = useState("");
-  const [date, setDate] = useState(app.civilToday);
+  const [name, setName] = useState(folder.name);
   const [error, setError] = useState<string | null>(null);
 
-  async function add() {
-    const result = await createCountdown(title, date);
+  async function save() {
+    const result = await renameFolder(folder, name);
     if (result.status !== "saved") {
       setError(result.status === "error" ? result.message : "Not saved");
       return;
     }
-    setTitle("");
-    setError(null);
     app.bump();
     onClose();
   }
 
   return (
-    <Dialog title="Add countdown" onClose={onClose}>
+    <Dialog title="Rename folder" onClose={onClose}>
       <form
         className="grid gap-3"
         onSubmit={(event) => {
           event.preventDefault();
-          void add();
+          void save();
         }}
       >
-        <Field label="Countdown" value={title} maxLength={80} onChange={(event) => setTitle(event.target.value)} />
-        <Field label="Date" type="date" value={date} onChange={(event) => setDate(event.target.value)} />
+        <Field label="Name" value={name} maxLength={80} onChange={(event) => setName(event.target.value)} />
         {error ? <p className="meta text-danger">{error}</p> : null}
         <div className="flex gap-2">
           <Button variant="primary" type="submit">
-            Add countdown
+            Rename
           </Button>
           <Button variant="secondary" onClick={onClose}>
             Cancel
@@ -871,10 +932,81 @@ function CountdownDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
-function FilterDialog({ onClose }: { onClose: () => void }) {
+function DeleteFolderDialog({ folder, onClose }: { folder: Folder; onClose: () => void }) {
   const app = useApp();
-  const [name, setName] = useState("");
-  const [rule, setRule] = useState<FilterRule>(emptyRule);
+  const [error, setError] = useState<string | null>(null);
+
+  async function remove() {
+    const result = await deleteFolder(folder.id);
+    if (result.status !== "saved") {
+      setError(result.status === "error" ? result.message : "Not saved");
+      return;
+    }
+    app.bump();
+    onClose();
+  }
+
+  return (
+    <Dialog title="Delete folder?" onClose={onClose}>
+      <p>Lists in this folder stay, with no folder.</p>
+      {error ? <p className="meta mt-2 text-danger">{error}</p> : null}
+      <div className="mt-4 flex gap-2">
+        <Button variant="danger" onClick={() => void remove()}>
+          Delete
+        </Button>
+        <Button variant="secondary" onClick={onClose}>
+          Cancel
+        </Button>
+      </div>
+    </Dialog>
+  );
+}
+
+export function CountdownDialog({ initial, onClose }: { initial: Countdown | null; onClose: () => void }) {
+  const app = useApp();
+  const [title, setTitle] = useState(initial?.title ?? "");
+  const [date, setDate] = useState(initial?.targetOn ?? app.civilToday);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save() {
+    const result = initial ? await updateCountdown(initial, title, date) : await createCountdown(title, date);
+    if (result.status !== "saved") {
+      setError(result.status === "error" ? result.message : "Not saved");
+      return;
+    }
+    app.bump();
+    onClose();
+  }
+
+  return (
+    <Dialog title={initial ? "Edit countdown" : "Add countdown"} onClose={onClose}>
+      <form
+        className="grid gap-3"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void save();
+        }}
+      >
+        <Field label="Countdown" value={title} maxLength={80} onChange={(event) => setTitle(event.target.value)} />
+        <Field label="Date" type="date" value={date} onChange={(event) => setDate(event.target.value)} />
+        {error ? <p className="meta text-danger">{error}</p> : null}
+        <div className="flex gap-2">
+          <Button variant="primary" type="submit">
+            {initial ? "Save" : "Add countdown"}
+          </Button>
+          <Button variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+        </div>
+      </form>
+    </Dialog>
+  );
+}
+
+export function FilterDialog({ initial, onClose }: { initial: SavedFilter | null; onClose: () => void }) {
+  const app = useApp();
+  const [name, setName] = useState(initial?.name ?? "");
+  const [rule, setRule] = useState<FilterRule>(() => (initial ? { ...initial.rule } : emptyRule()));
   const [tags, setTags] = useState<Tag[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -891,18 +1023,18 @@ function FilterDialog({ onClose }: { onClose: () => void }) {
   }, []);
 
   async function save() {
-    const result = await createFilter(name, rule);
+    const result = initial ? await updateFilter(initial, name, rule) : await createFilter(name, rule);
     if (result.status !== "saved") {
       setError(result.status === "error" ? result.message : "Not saved");
       return;
     }
     app.bump();
-    app.goFilter(result.row.id);
+    if (!initial) app.goFilter(result.row.id);
     onClose();
   }
 
   return (
-    <Dialog title="New filter" onClose={onClose}>
+    <Dialog title={initial ? "Edit filter" : "New filter"} onClose={onClose}>
       <form
         className="grid gap-3"
         onSubmit={(event) => {

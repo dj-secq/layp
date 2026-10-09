@@ -5,9 +5,9 @@ import { Button } from "../components/Button";
 import { Skeleton, useViewLoad } from "../components/Skeleton";
 import { patchTask, tasksInRange } from "../db/tasks";
 import type { Task, TaskList } from "../db/types";
-import { formatClock, type ClockPreference } from "../lib/clock";
-import { monthCells, monthLabel, shiftMonth, weekdayLabels, type WeekStart } from "../lib/dates";
-import { weekBounds } from "../lib/journal";
+import { formatClock, type ClockPreference } from "@layp/shared";
+import { monthCells, monthLabel, shiftMonth, weekdayLabels, type WeekStart } from "@layp/shared";
+import { weekBounds } from "@layp/shared";
 import { useApp } from "../state/AppState";
 
 type Mode = "month" | "week" | "day" | "agenda";

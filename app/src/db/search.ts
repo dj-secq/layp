@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ftsMatch, likePattern } from "../lib/search";
+import { ftsMatch, likePattern } from "@layp/shared";
 import { query } from "./client";
 
 const taskHit = z.object({

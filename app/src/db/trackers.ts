@@ -1,16 +1,16 @@
 import { Temporal } from "temporal-polyfill";
 import { z } from "zod";
-import { nowIso } from "../lib/clock";
 import {
   cleanLog,
   cleanTrackerDraft,
   parseSchedule,
   serializeSchedule,
+  STICKERS,
   type Schedule,
   type TrackerKind,
-} from "../lib/journal";
-import { STICKERS } from "../lib/stickers";
-import { logFailure, query, run } from "./client";
+} from "@layp/shared";
+import { logFailure, query, writeStamped } from "./client";
+import { deletionStatement } from "./deletions";
 import type { SaveResult } from "./types";
 
 function asNumber(value: unknown): unknown {
@@ -174,27 +174,28 @@ async function insertTracker(draft: {
   isHobby: boolean;
 }): Promise<SaveResult<Tracker>> {
   const id = crypto.randomUUID();
-  const stamp = nowIso();
   try {
     const sortOrder = await nextSortOrder();
-    await run(
-      `INSERT INTO trackers (
+    const { stamp } = await writeStamped((stamp) => [
+      {
+        sql: `INSERT INTO trackers (
          id, name, kind, unit, daily_target, color, is_hobby, schedule_json,
          sort_order, archived_at, created_at, updated_at
        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NULL, $10, $10)`,
-      [
-        id,
-        draft.name,
-        draft.kind,
-        draft.unit,
-        draft.dailyTarget,
-        draft.color,
-        draft.isHobby ? 1 : 0,
-        serializeSchedule(draft.schedule),
-        sortOrder,
-        stamp,
-      ],
-    );
+        values: [
+          id,
+          draft.name,
+          draft.kind,
+          draft.unit,
+          draft.dailyTarget,
+          draft.color,
+          draft.isHobby ? 1 : 0,
+          serializeSchedule(draft.schedule),
+          sortOrder,
+          stamp,
+        ],
+      },
+    ]);
     return {
       status: "saved",
       row: {
@@ -212,7 +213,7 @@ async function insertTracker(draft: {
         updatedAt: stamp,
       },
     };
-  } catch (err) {
+  } catch {
     await logFailure("tracker save failed");
     return { status: "error", message: "Not saved" };
   }
@@ -256,6 +257,101 @@ export async function createTracker(input: {
   });
 }
 
+async function countLogs(trackerId: string): Promise<number> {
+  const rows = await query<{ count: number | string }>(
+    `SELECT COUNT(*) AS count FROM tracker_logs WHERE tracker_id = $1`,
+    [trackerId],
+  );
+  return Number(rows[0]?.count ?? 0);
+}
+
+export async function trackerLogCounts(): Promise<Map<string, number>> {
+  const rows = await query<{ tracker_id: string; count: number | string }>(
+    `SELECT tracker_id, COUNT(*) AS count FROM tracker_logs GROUP BY tracker_id`,
+  );
+  return new Map(rows.map((row) => [row.tracker_id, Number(row.count)]));
+}
+
+/** Does not rewrite tracker_logs. A schedule change leaves history as it was. */
+export async function updateTracker(
+  tracker: Tracker,
+  input: {
+    name: string;
+    kind: TrackerKind;
+    unit: string;
+    target: string;
+    schedule: Schedule;
+    color: string;
+  },
+): Promise<SaveResult<Tracker>> {
+  if (tracker.isHobby) return { status: "error", message: "Not saved" };
+  const cleaned = cleanTrackerDraft({
+    name: input.name,
+    kind: input.kind,
+    unit: input.unit,
+    target: input.target,
+    schedule: input.schedule,
+    hobby: false,
+  });
+  if (!cleaned.ok) return { status: "error", message: cleaned.error };
+  const color = stickerHex(input.color);
+  if (!color) return { status: "error", message: "Pick a color." };
+  try {
+    const logCount = await countLogs(tracker.id);
+    if (logCount > 0 && cleaned.kind !== tracker.kind) {
+      return { status: "error", message: "Kind stays after the first log." };
+    }
+    const schedule = serializeSchedule(cleaned.schedule);
+    const { stamp, batches } = await writeStamped((stamp) => [
+      logCount === 0
+        ? {
+            sql: `UPDATE trackers
+               SET name = $1, kind = $2, unit = $3, daily_target = $4, color = $5, schedule_json = $6, updated_at = $7
+             WHERE id = $8 AND updated_at = $9`,
+            values: [
+              cleaned.name,
+              cleaned.kind,
+              cleaned.unit,
+              cleaned.dailyTarget,
+              color,
+              schedule,
+              stamp,
+              tracker.id,
+              tracker.updatedAt,
+            ],
+          }
+        : {
+            sql: `UPDATE trackers
+               SET name = $1, unit = $2, daily_target = $3, color = $4, schedule_json = $5, updated_at = $6
+             WHERE id = $7 AND updated_at = $8`,
+            values: [cleaned.name, cleaned.unit, cleaned.dailyTarget, color, schedule, stamp, tracker.id, tracker.updatedAt],
+          },
+    ]);
+    const affected = batches[0]?.rowsAffected ?? 0;
+    if (affected === 0) {
+      const current = await getTracker(tracker.id);
+      if (!current) return { status: "error", message: "Not saved" };
+      return { status: "conflict", current };
+    }
+    return {
+      status: "saved",
+      row: {
+        ...tracker,
+        name: cleaned.name,
+        kind: cleaned.kind,
+        unit: cleaned.unit,
+        dailyTarget: cleaned.dailyTarget,
+        color,
+        schedule: cleaned.schedule,
+        updatedAt: stamp,
+      },
+    };
+  } catch {
+    await logFailure("tracker save failed");
+    return { status: "error", message: "Not saved" };
+  }
+}
+
 export async function createHobby(name: string, color: string): Promise<SaveResult<Tracker>> {
   const cleaned = cleanTrackerDraft({
     name,
@@ -279,35 +375,66 @@ export async function createHobby(name: string, color: string): Promise<SaveResu
   });
 }
 
-async function setArchived(
-  tracker: Tracker,
-  archivedAt: string | null,
-  stamp: string,
-): Promise<SaveResult<Tracker>> {
+export async function updateHobby(tracker: Tracker, name: string, color: string): Promise<SaveResult<Tracker>> {
+  if (!tracker.isHobby || tracker.kind !== "minutes") return { status: "error", message: "Not saved" };
+  const cleaned = cleanTrackerDraft({
+    name,
+    kind: "minutes",
+    unit: "",
+    target: "",
+    schedule: { type: "daily" },
+    hobby: true,
+  });
+  if (!cleaned.ok) return { status: "error", message: cleaned.error };
+  const hex = stickerHex(color);
+  if (!hex) return { status: "error", message: "Pick a color." };
   try {
-    const affected = await run(
-      `UPDATE trackers SET archived_at = $1, updated_at = $2 WHERE id = $3 AND updated_at = $4`,
-      [archivedAt, stamp, tracker.id, tracker.updatedAt],
-    );
+    const { stamp, batches } = await writeStamped((stamp) => [
+      {
+        sql: `UPDATE trackers SET name = $1, color = $2, updated_at = $3
+       WHERE id = $4 AND updated_at = $5 AND is_hobby = 1 AND kind = 'minutes'`,
+        values: [cleaned.name, hex, stamp, tracker.id, tracker.updatedAt],
+      },
+    ]);
+    const affected = batches[0]?.rowsAffected ?? 0;
     if (affected === 0) {
       const current = await getTracker(tracker.id);
       if (!current) return { status: "error", message: "Not saved" };
       return { status: "conflict", current };
     }
-    return { status: "saved", row: { ...tracker, archivedAt, updatedAt: stamp } };
-  } catch (err) {
+    return { status: "saved", row: { ...tracker, name: cleaned.name, color: hex, updatedAt: stamp } };
+  } catch {
+    await logFailure("tracker save failed");
+    return { status: "error", message: "Not saved" };
+  }
+}
+
+async function setArchived(tracker: Tracker, archivedAt: "clock" | null): Promise<SaveResult<Tracker>> {
+  try {
+    const { stamp, batches } = await writeStamped((stamp) => [
+      {
+        sql: `UPDATE trackers SET archived_at = $1, updated_at = $2 WHERE id = $3 AND updated_at = $4`,
+        values: [archivedAt === "clock" ? stamp : null, stamp, tracker.id, tracker.updatedAt],
+      },
+    ]);
+    if ((batches[0]?.rowsAffected ?? 0) === 0) {
+      const current = await getTracker(tracker.id);
+      if (!current) return { status: "error", message: "Not saved" };
+      return { status: "conflict", current };
+    }
+    return { status: "saved", row: { ...tracker, archivedAt: archivedAt === "clock" ? stamp : null, updatedAt: stamp } };
+  } catch {
     await logFailure("tracker save failed");
     return { status: "error", message: "Not saved" };
   }
 }
 
 export async function archiveTracker(tracker: Tracker): Promise<SaveResult<Tracker>> {
-  const stamp = nowIso();
-  return setArchived(tracker, stamp, stamp);
+  return setArchived(tracker, "clock");
 }
 
 export async function restoreTracker(tracker: Tracker): Promise<SaveResult<Tracker>> {
-  return setArchived(tracker, null, nowIso());
+  return setArchived(tracker, null);
 }
 
 export async function deleteHobby(tracker: Tracker, typedName: string): Promise<SaveResult<null>> {
@@ -315,11 +442,15 @@ export async function deleteHobby(tracker: Tracker, typedName: string): Promise<
   if (typedName.trim() !== tracker.name) {
     return { status: "error", message: "Type the hobby name to delete it." };
   }
+  const rows = await query<{ id: string }>(`SELECT id FROM trackers WHERE id = $1 AND is_hobby = 1`, [tracker.id]);
+  if (rows.length === 0) return { status: "error", message: "Not saved" };
   try {
-    const affected = await run(`DELETE FROM trackers WHERE id = $1 AND is_hobby = 1`, [tracker.id]);
-    if (affected === 0) return { status: "error", message: "Not saved" };
+    await writeStamped((stamp) => [
+      deletionStatement("trackers", tracker.id, stamp),
+      { sql: `DELETE FROM trackers WHERE id = $1 AND is_hobby = 1`, values: [tracker.id] },
+    ]);
     return { status: "saved", row: null };
-  } catch (err) {
+  } catch {
     await logFailure("hobby delete failed");
     return { status: "error", message: "Not saved" };
   }
@@ -338,18 +469,19 @@ export async function upsertLog(
   });
   if (!cleaned.ok) return { status: "error", message: cleaned.error };
   const id = crypto.randomUUID();
-  const stamp = nowIso();
   try {
-    await run(
-      `INSERT INTO tracker_logs (id, tracker_id, day, state, value, note, updated_at)
+    await writeStamped((stamp) => [
+      {
+        sql: `INSERT INTO tracker_logs (id, tracker_id, day, state, value, note, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        ON CONFLICT(tracker_id, day) DO UPDATE SET
          state = excluded.state,
          value = excluded.value,
          note = excluded.note,
          updated_at = excluded.updated_at`,
-      [id, tracker.id, day, cleaned.state, cleaned.value, cleaned.note, stamp],
-    );
+        values: [id, tracker.id, day, cleaned.state, cleaned.value, cleaned.note, stamp],
+      },
+    ]);
     const rows = await query<unknown>(
       `SELECT ${LOG_COLUMNS} FROM tracker_logs WHERE tracker_id = $1 AND day = $2`,
       [tracker.id, day],
@@ -359,7 +491,7 @@ export async function upsertLog(
       return { status: "error", message: "Not saved" };
     }
     return { status: "saved", row: parseLog(rows[0]) };
-  } catch (err) {
+  } catch {
     await logFailure("tracker log save failed");
     return { status: "error", message: "Not saved" };
   }
@@ -367,9 +499,18 @@ export async function upsertLog(
 
 export async function clearLog(trackerId: string, day: string): Promise<SaveResult<null>> {
   try {
-    await run(`DELETE FROM tracker_logs WHERE tracker_id = $1 AND day = $2`, [trackerId, day]);
+    const rows = await query<{ id: string }>(
+      `SELECT id FROM tracker_logs WHERE tracker_id = $1 AND day = $2`,
+      [trackerId, day],
+    );
+    const logId = rows[0]?.id;
+    if (!logId) return { status: "saved", row: null };
+    await writeStamped((stamp) => [
+      deletionStatement("tracker_logs", logId, stamp),
+      { sql: `DELETE FROM tracker_logs WHERE id = $1`, values: [logId] },
+    ]);
     return { status: "saved", row: null };
-  } catch (err) {
+  } catch {
     await logFailure("tracker log clear failed");
     return { status: "error", message: "Not saved" };
   }

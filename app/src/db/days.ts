@@ -1,5 +1,4 @@
-import { nowIso } from "../lib/clock";
-import { logFailure, query, run } from "./client";
+import { logFailure, query, writeStamped } from "./client";
 import { daySchema, emptyDay, type Day, type SaveResult } from "./types";
 
 function parseDay(row: unknown): Day {
@@ -16,50 +15,44 @@ export async function getDay(day: string): Promise<Day | null> {
 }
 
 export async function saveDay(day: Day, expectedUpdatedAt: string, force = false): Promise<SaveResult<Day>> {
-  const stamp = nowIso();
-  const values = [
-    day.diary,
-    day.mood,
-    day.sleepHours,
-    day.sleepBed,
-    day.sleepWake,
-    day.workout,
-    day.workoutNote.slice(0, 500),
-    stamp,
-    day.day,
-  ];
+  const note = day.workoutNote.slice(0, 500);
   try {
-    if (!expectedUpdatedAt) {
-      try {
-        await run(
-          `INSERT INTO days (diary, mood, sleep_hours, sleep_bed, sleep_wake, workout, workout_note, updated_at, day)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-          values,
-        );
-        return { status: "saved", row: { ...day, workoutNote: day.workoutNote.slice(0, 500), updatedAt: stamp } };
-      } catch (err) {
-        const current = await getDay(day.day);
-        if (current) return { status: "conflict", current };
-        throw err;
+    const saved = await writeStamped((stamp) => {
+      const values = [day.diary, day.mood, day.sleepHours, day.sleepBed, day.sleepWake, day.workout, note, stamp, day.day];
+      if (!expectedUpdatedAt) {
+        return [
+          {
+            sql: `INSERT INTO days (diary, mood, sleep_hours, sleep_bed, sleep_wake, workout, workout_note, updated_at, day)
+                  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+            values,
+          },
+        ];
       }
+      const sql = force
+        ? `UPDATE days
+           SET diary = $1, mood = $2, sleep_hours = $3, sleep_bed = $4, sleep_wake = $5,
+               workout = $6, workout_note = $7, updated_at = $8
+           WHERE day = $9`
+        : `UPDATE days
+           SET diary = $1, mood = $2, sleep_hours = $3, sleep_bed = $4, sleep_wake = $5,
+               workout = $6, workout_note = $7, updated_at = $8
+           WHERE day = $9 AND updated_at = $10`;
+      return [{ sql, values: force ? values : [...values, expectedUpdatedAt] }];
+    });
+    if (!expectedUpdatedAt) {
+      return { status: "saved", row: { ...day, workoutNote: note, updatedAt: saved.stamp } };
     }
-    const sql = force
-      ? `UPDATE days
-         SET diary = $1, mood = $2, sleep_hours = $3, sleep_bed = $4, sleep_wake = $5,
-             workout = $6, workout_note = $7, updated_at = $8
-         WHERE day = $9`
-      : `UPDATE days
-         SET diary = $1, mood = $2, sleep_hours = $3, sleep_bed = $4, sleep_wake = $5,
-             workout = $6, workout_note = $7, updated_at = $8
-         WHERE day = $9 AND updated_at = $10`;
-    const affected = await run(sql, force ? values : [...values, expectedUpdatedAt]);
-    if (affected === 0) {
+    if ((saved.batches[0]?.rowsAffected ?? 0) === 0) {
       const current = await getDay(day.day);
       if (!current) return saveDay(day, "", false);
       return { status: "conflict", current };
     }
-    return { status: "saved", row: { ...day, workoutNote: day.workoutNote.slice(0, 500), updatedAt: stamp } };
-  } catch (err) {
+    return { status: "saved", row: { ...day, workoutNote: note, updatedAt: saved.stamp } };
+  } catch {
+    if (!expectedUpdatedAt) {
+      const current = await getDay(day.day);
+      if (current) return { status: "conflict", current };
+    }
     await logFailure("day save failed");
     return { status: "error", message: "Not saved" };
   }

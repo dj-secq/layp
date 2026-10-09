@@ -96,7 +96,13 @@ function parseEnd(value: unknown): RecurrenceEnd | null {
       return null;
     }
   }
-  if (end.type === "count" && typeof end.remaining === "number" && Number.isInteger(end.remaining) && end.remaining >= 1) {
+  if (
+    end.type === "count" &&
+    typeof end.remaining === "number" &&
+    Number.isInteger(end.remaining) &&
+    end.remaining >= 1 &&
+    end.remaining <= 999
+  ) {
     return { type: "count", remaining: end.remaining };
   }
   return null;

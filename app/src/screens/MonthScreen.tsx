@@ -4,9 +4,9 @@ import { Temporal } from "temporal-polyfill";
 import { Button } from "../components/Button";
 import { Skeleton, useViewLoad } from "../components/Skeleton";
 import { daysBetween, loadTrackers, logsBetween, type Tracker, type TrackerLog } from "../db/trackers";
-import { averageSleep, leadingHobby, sumMinutes } from "../lib/journal";
-import { monthCells, monthLabel, shiftMonth, weekdayLabels } from "../lib/dates";
-import { MOOD_COLORS } from "../lib/stickers";
+import { averageSleep, leadingHobby, sumMinutes } from "@layp/shared";
+import { monthCells, monthLabel, shiftMonth, weekdayLabels } from "@layp/shared";
+import { MOOD_COLORS } from "@layp/shared";
 import { useApp } from "../state/AppState";
 
 export function MonthScreen({ year, month }: { year: number; month: number }) {

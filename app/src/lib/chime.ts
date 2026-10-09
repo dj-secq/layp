@@ -1,4 +1,4 @@
-import { CHIME_GAP_SECONDS, CHIME_PLAYS, type FocusSound } from "./focusSound";
+import { CHIME_GAP_SECONDS, CHIME_PLAYS, type FocusSound } from "@layp/shared";
 
 const FILES: Record<Exclude<FocusSound, "none">, string> = {
   soft: "/sounds/soft.wav",

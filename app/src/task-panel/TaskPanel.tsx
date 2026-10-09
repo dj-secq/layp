@@ -2,17 +2,17 @@ import { useEffect, useRef, useState } from "react";
 import { firstSectionId } from "../db/lists";
 import { childCount, completeTask, getTask, patchTask, reopenTask, trashTask, type TaskPatch } from "../db/tasks";
 import type { Priority, Task } from "../db/types";
-import { describeRule, parseRule } from "../lib/recur";
 import { ChecklistRows } from "./ChecklistRows";
 import { TaskFiles } from "./TaskFiles";
-import { formatClock, parseClock } from "../lib/clock";
-import { cleanDuration, cleanTitle } from "../lib/validate";
+import { formatClock, parseClock } from "@layp/shared";
+import { cleanDuration, cleanTitle } from "@layp/shared";
 import { useApp } from "../state/AppState";
 import { Check, RotateCcw, Trash2 } from "lucide-react";
 import { Button } from "../components/Button";
 import { Choice } from "../components/Choice";
 import { Dialog } from "../components/Dialog";
 import { Area, CheckField, Field } from "../components/Field";
+import { RecurrenceEditor } from "./RecurrenceEditor";
 import { ReminderEditor } from "./ReminderEditor";
 import { HistoryList, StartFocus, Subtasks, TagPicker } from "./TaskExtras";
 
@@ -276,7 +276,7 @@ export function TaskPanel({ overlay }: { overlay: boolean }) {
           </details>
           <details className="fold">
             <summary>Recurrence</summary>
-            {describeRecurrence(task.recurrenceJson) ?? <p className="meta">Does not repeat.</p>}
+            <RecurrenceEditor task={task} today={app.civilToday} onSave={enqueue} />
           </details>
           <details className="fold">
             <summary>Estimate</summary>
@@ -370,9 +370,5 @@ export function TaskPanel({ overlay }: { overlay: boolean }) {
   );
 }
 
-function describeRecurrence(json: string | null) {
-  const rule = json ? parseRule(json) : null;
-  if (!rule) return null;
-  return <p className="meta">{describeRule(rule)}</p>;
-}
+
 

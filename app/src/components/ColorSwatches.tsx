@@ -1,4 +1,4 @@
-import { STICKERS, stickerName } from "../lib/stickers";
+import { STICKERS, stickerName } from "@layp/shared";
 
 export function ColorSwatches({ color, onChange }: { color: string; onChange: (hex: string) => void }) {
   return (

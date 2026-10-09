@@ -1,12 +1,12 @@
 import { z } from "zod";
-import { nowIso } from "../lib/clock";
 import {
   checklistReminderBlock,
   checklistReminderCopies,
   reconcileChecklistReminders,
   type ChecklistReminderLink,
-} from "../lib/checklistReminders";
-import { logFailure, query, run } from "./client";
+} from "@layp/shared";
+import { logFailure, query, withStamp, writeStamped, type SqlStatement } from "./client";
+import { deletionStatement } from "./deletions";
 import type { SaveResult } from "./types";
 
 const count = z.union([z.number(), z.string()]).transform((value) => Number(value));
@@ -49,12 +49,21 @@ export async function checklistRemindersForTask(taskId: string): Promise<Checkli
 export async function syncChecklistReminders(taskId: string, previousNotes: string, nextNotes: string): Promise<void> {
   const current = await checklistRemindersForTask(taskId);
   const plan = reconcileChecklistReminders(previousNotes, nextNotes, current);
-  for (const update of plan.updates) {
-    await run(`UPDATE checklist_reminders SET line_text = $1 WHERE id = $2`, [update.lineText, update.id]);
-  }
-  for (const id of plan.removeIds) {
-    await run(`DELETE FROM checklist_reminders WHERE id = $1`, [id]);
-  }
+  if (plan.updates.length === 0 && plan.removeIds.length === 0) return;
+  await withStamp(async (stamp, run) => {
+    const statements: SqlStatement[] = [];
+    for (const update of plan.updates) {
+      statements.push({
+        sql: `UPDATE checklist_reminders SET line_text = $1, updated_at = $2 WHERE id = $3`,
+        values: [update.lineText, stamp, update.id],
+      });
+    }
+    for (const id of plan.removeIds) {
+      statements.push(deletionStatement("checklist_reminders", id, stamp));
+      statements.push({ sql: `DELETE FROM checklist_reminders WHERE id = $1`, values: [id] });
+    }
+    await run(statements);
+  });
 }
 
 export async function addChecklistReminder(input: {
@@ -85,19 +94,23 @@ export async function addChecklistReminder(input: {
       minutesBefore: input.minutesBefore,
     };
     if (current) {
-      await run(
-        `UPDATE checklist_reminders
-         SET due_on = $1, due_time = $2, minutes_before = $3, fired_at = NULL
-         WHERE id = $4`,
-        [row.dueOn, row.dueTime, row.minutesBefore, row.id],
-      );
+      await writeStamped((stamp) => [
+        {
+          sql: `UPDATE checklist_reminders
+                SET due_on = $1, due_time = $2, minutes_before = $3, fired_at = NULL, updated_at = $4
+                WHERE id = $5`,
+          values: [row.dueOn, row.dueTime, row.minutesBefore, stamp, row.id],
+        },
+      ]);
     } else {
-      await run(
-        `INSERT INTO checklist_reminders (
-           id, task_id, line_text, due_on, due_time, minutes_before, fired_at, created_at
-         ) VALUES ($1, $2, $3, $4, $5, $6, NULL, $7)`,
-        [row.id, input.taskId, row.lineText, row.dueOn, row.dueTime, row.minutesBefore, nowIso()],
-      );
+      await writeStamped((stamp) => [
+        {
+          sql: `INSERT INTO checklist_reminders (
+                  id, task_id, line_text, due_on, due_time, minutes_before, fired_at, created_at, updated_at
+                ) VALUES ($1, $2, $3, $4, $5, $6, NULL, $7, $7)`,
+          values: [row.id, input.taskId, row.lineText, row.dueOn, row.dueTime, row.minutesBefore, stamp],
+        },
+      ]);
     }
     return { status: "saved", row };
   } catch {
@@ -107,9 +120,15 @@ export async function addChecklistReminder(input: {
 }
 
 export async function removeChecklistReminder(id: string): Promise<SaveResult<{ id: string }>> {
+  const rows = await query<{ id: string }>(`SELECT id FROM checklist_reminders WHERE id = $1`, [id]);
+  if (rows.length === 0) return { status: "error", message: "Not saved" };
   try {
-    const affected = await run(`DELETE FROM checklist_reminders WHERE id = $1`, [id]);
-    if (affected === 0) return { status: "error", message: "Not saved" };
+    await withStamp(async (stamp, run) => {
+      await run([
+        deletionStatement("checklist_reminders", id, stamp),
+        { sql: `DELETE FROM checklist_reminders WHERE id = $1`, values: [id] },
+      ]);
+    });
     return { status: "saved", row: { id } };
   } catch {
     await logFailure("reminder failed");
@@ -117,7 +136,7 @@ export async function removeChecklistReminder(id: string): Promise<SaveResult<{ 
   }
 }
 
-export async function copyChecklistReminders(fromTaskId: string, toTaskId: string, stamp: string): Promise<void> {
+export async function copyChecklistReminders(fromTaskId: string, toTaskId: string): Promise<void> {
   const rows = await query<{ line_text: string; due_on: string; due_time: string | null; minutes_before: number | string }>(
     `SELECT line_text, due_on, due_time, minutes_before FROM checklist_reminders WHERE task_id = $1`,
     [fromTaskId],
@@ -130,12 +149,13 @@ export async function copyChecklistReminders(fromTaskId: string, toTaskId: strin
       minutesBefore: Number(row.minutes_before),
     })),
   );
-  for (const row of copies) {
-    await run(
-      `INSERT INTO checklist_reminders (
-         id, task_id, line_text, due_on, due_time, minutes_before, fired_at, created_at
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [crypto.randomUUID(), toTaskId, row.lineText, row.dueOn, row.dueTime, row.minutesBefore, row.firedAt, stamp],
-    );
-  }
+  if (copies.length === 0) return;
+  await writeStamped((stamp) =>
+    copies.map((row) => ({
+      sql: `INSERT INTO checklist_reminders (
+              id, task_id, line_text, due_on, due_time, minutes_before, fired_at, created_at, updated_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)`,
+      values: [crypto.randomUUID(), toTaskId, row.lineText, row.dueOn, row.dueTime, row.minutesBefore, row.firedAt, stamp],
+    })),
+  );
 }

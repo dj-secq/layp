@@ -10,9 +10,9 @@ import { firstSectionId } from "../db/lists";
 import { loadUnfiredReminders, markFired } from "../db/reminders";
 import { completeTask, createTask, reopenTask, tasksForDate } from "../db/tasks";
 import type { Task } from "../db/types";
-import { addDays, formatDay } from "../lib/dates";
-import { reminderLabel, scheduleReminders, splitByHorizon, type ScheduledReminder } from "../lib/remind";
-import { groupTasksForDay } from "../lib/today";
+import { addDays, formatDay } from "@layp/shared";
+import { reminderLabel, scheduleReminders, splitByHorizon, type ScheduledReminder } from "@layp/shared";
+import { groupTasksForDay } from "@layp/shared";
 import { useApp } from "../state/AppState";
 import { InlineAdd } from "./InlineAdd";
 

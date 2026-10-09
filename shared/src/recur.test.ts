@@ -52,4 +52,21 @@ describe("parseRule", () => {
     const value = rule({ freq: "weekly", byWeekday: ["MO", "FR"], interval: 2 });
     expect(parseRule(serializeRule(value))).toEqual(value);
   });
+
+  it("round-trips a weekly rule with no selected weekdays", () => {
+    const value = rule({ freq: "weekly", byWeekday: null });
+    expect(parseRule(serializeRule(value))).toEqual(value);
+  });
+
+  it("rejects an empty weekday list", () => {
+    const value = rule({ freq: "weekly", byWeekday: [] });
+    expect(parseRule(serializeRule(value))).toBeNull();
+  });
+
+  it("accepts a count of 999 and rejects a count above that", () => {
+    const capped = rule({ freq: "daily", end: { type: "count", remaining: 999 } });
+    expect(parseRule(serializeRule(capped))).toEqual(capped);
+    const over = rule({ freq: "daily", end: { type: "count", remaining: 1000 } });
+    expect(parseRule(serializeRule(over))).toBeNull();
+  });
 });

@@ -1,7 +1,7 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Temporal } from "temporal-polyfill";
-import { monthCells, monthLabel, shiftMonth, weekdayLabels, type WeekStart } from "../lib/dates";
+import { monthCells, monthLabel, shiftMonth, weekdayLabels, type WeekStart } from "@layp/shared";
 import { useApp } from "../state/AppState";
 import { Button } from "./Button";
 

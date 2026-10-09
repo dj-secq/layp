@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "../components/Button";
 import { addReminder, remindersForTask, removeReminder, type TaskReminder } from "../db/reminders";
-import { reminderLabel } from "../lib/remind";
+import { reminderLabel } from "@layp/shared";
 
 const PRESETS = [
   { minutes: 0, label: "At due time" },

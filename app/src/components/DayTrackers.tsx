@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "./Button";
 import { clearLog, loadTrackers, logsBetween, upsertLog, type Tracker, type TrackerLog } from "../db/trackers";
-import { cellScheduled } from "../lib/journal";
+import { cellScheduled } from "@layp/shared";
 import { useApp } from "../state/AppState";
 
 export function DayTrackers({ date }: { date: string }) {

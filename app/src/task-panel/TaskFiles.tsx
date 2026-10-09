@@ -5,7 +5,7 @@ import { Button } from "../components/Button";
 import { addAttachment, attachmentsForTask, removeAttachment, type Attachment } from "../db/attachments";
 import { copyAttachment, openAttachment } from "../desktop/files";
 import { failureText } from "../desktop/backup";
-import { formatBytes } from "../lib/attachments";
+import { formatBytes } from "@layp/shared";
 import { useApp } from "../state/AppState";
 
 export function TaskFiles({ taskId }: { taskId: string }) {

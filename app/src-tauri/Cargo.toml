@@ -18,11 +18,18 @@ crate-type = ["rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+base64 = "0.22"
+chacha20poly1305 = "0.10"
+libc = "0.2"
 log = "0.4"
 notify-rust = "4"
+rand = "0.8"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+sha2 = "0.10"
+sqlx = { version = "0.8", default-features = false, features = ["sqlite", "runtime-tokio"] }
 tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tokio = { version = "1", features = ["io-util", "macros", "net", "rt", "sync", "time"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-log = "2"
@@ -31,6 +38,9 @@ tauri-plugin-single-instance = "2"
 tauri-plugin-sql = { version = "2", features = ["sqlite"] }
 tauri-plugin-window-state = "2"
 zip = { version = "2.2", default-features = false, features = ["deflate"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "test-util"] }
 
 [profile.dev]
 # Keep file and line numbers for Layp. Full variable debug info is what

@@ -1,5 +1,5 @@
-import { logFailure, query, run } from "./client";
-import { parseFocusSound } from "../lib/focusSound";
+import { logFailure, query, writeStamped } from "./client";
+import { parseFocusSound } from "@layp/shared";
 import { defaultSettings, isThemeName, type Settings } from "./types";
 
 const KEYS = {
@@ -12,6 +12,7 @@ const KEYS = {
   pomoSoundWork: "pomo_sound_work",
   pomoSoundBreak: "pomo_sound_break",
   clock: "clock",
+  phoneLink: "phone_link",
 } as const;
 
 export async function loadSettings(): Promise<Settings> {
@@ -33,16 +34,19 @@ export async function loadSettings(): Promise<Settings> {
     pomoSoundWork: parseFocusSound(values.get(KEYS.pomoSoundWork)),
     pomoSoundBreak: parseFocusSound(values.get(KEYS.pomoSoundBreak)),
     clock: clock === "24" ? "24" : "12",
+    phoneLink: values.get(KEYS.phoneLink) === "on",
   };
 }
 
 export async function saveSetting(key: keyof typeof KEYS, value: string): Promise<void> {
   try {
-    await run(
-      `INSERT INTO settings (key, value) VALUES ($1, $2)
-       ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
-      [KEYS[key], value],
-    );
+    await writeStamped((stamp) => [
+      {
+        sql: `INSERT INTO settings (key, value, updated_at) VALUES ($1, $2, $3)
+              ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+        values: [KEYS[key], value, stamp],
+      },
+    ]);
   } catch (err) {
     await logFailure("settings save failed");
     throw err;

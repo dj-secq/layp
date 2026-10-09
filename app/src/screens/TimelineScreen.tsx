@@ -2,8 +2,8 @@ import { useEffect, useState, type PointerEvent as ReactPointerEvent } from "rea
 import { Temporal } from "temporal-polyfill";
 import { patchTask, tasksForTimeline } from "../db/tasks";
 import type { Task } from "../db/types";
-import { addDays } from "../lib/dates";
-import { timelineDays, timelineGroups, timelineRanges, type TimelineRange } from "../lib/timeline";
+import { addDays } from "@layp/shared";
+import { timelineDays, timelineGroups, timelineRanges, type TimelineRange } from "@layp/shared";
 import { Skeleton, useViewLoad } from "../components/Skeleton";
 import { useApp } from "../state/AppState";
 

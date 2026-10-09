@@ -1,12 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "../components/Button";
 import { Skeleton, useViewLoad } from "../components/Skeleton";
 import { Choice } from "../components/Choice";
+import { Dialog } from "../components/Dialog";
 import { TaskRow } from "../components/TaskRow";
-import { createSection, firstSectionId, reorderSections } from "../db/lists";
+import { createSection, deleteSection, firstSectionId, renameSection, reorderSections } from "../db/lists";
 import { completeTask, createTask, reopenTask, rewriteOrder, tasksForList } from "../db/tasks";
 import type { Section, Task } from "../db/types";
-import { movedIds, sortTasks, type TaskSort } from "../lib/planner";
+import { movedIds, sortTasks, type TaskSort } from "@layp/shared";
+import { compareSections, sectionDeletePlan } from "../lib/sections";
 import { useApp } from "../state/AppState";
 import { InlineAdd } from "./InlineAdd";
 
@@ -22,9 +24,7 @@ export function ListScreen({ listId }: { listId: string }) {
   const [sectionName, setSectionName] = useState("");
   const [enteredId, setEnteredId] = useState<string | null>(null);
   const view = useViewLoad(listId);
-  const sections = app.sections
-    .filter((section) => section.listId === listId)
-    .sort((a, b) => a.sortOrder - b.sortOrder);
+  const sections = app.sections.filter((section) => section.listId === listId).sort(compareSections);
   const open = tasks.filter((task) => task.completedAt === null);
   const completed = tasks.filter((task) => task.completedAt !== null);
   const loose = open.filter((task) => !sections.some((section) => section.id === task.sectionId));
@@ -125,6 +125,7 @@ export function ListScreen({ listId }: { listId: string }) {
         <SectionBlock
           key={section.id}
           section={section}
+          sections={sections}
           tasks={sortTasks(open.filter((task) => task.sectionId === section.id), sortMode)}
           enteredId={enteredId}
           sortMode={sortMode}
@@ -151,22 +152,11 @@ export function ListScreen({ listId }: { listId: string }) {
         >
           Add section
         </Button>
-        {sections.length > 1 ? (
-          <Button
-            small
-            onClick={() => {
-              const ids = sections.map((section) => section.id);
-              const next = movedIds(ids, ids[0], 1);
-              if (next) void reorderSections(next).then(() => void app.refreshLists());
-            }}
-          >
-            Move first section down
-          </Button>
-        ) : null}
       </div>
       {view.ready && loose.length > 0 ? (
         <SectionBlock
-          section={{ id: "loose", listId, name: "No section", sortOrder: 0 }}
+          section={{ id: "loose", listId, name: "No section", sortOrder: 0, updatedAt: "" }}
+          sections={[]}
           tasks={sortTasks(loose, sortMode)}
           enteredId={enteredId}
           sortMode={sortMode}
@@ -194,8 +184,9 @@ export function ListScreen({ listId }: { listId: string }) {
   );
 }
 
-function SectionBlock({
+export function SectionBlock({
   section,
+  sections,
   tasks,
   enteredId,
   sortMode,
@@ -203,16 +194,149 @@ function SectionBlock({
   onMove,
 }: {
   section: Section;
+  sections: Section[];
   tasks: Task[];
   enteredId: string | null;
   sortMode: TaskSort;
   onToggle: (task: Task) => Promise<void>;
   onMove: (id: string, direction: -1 | 1, ids: string[]) => void;
 }) {
+  const app = useApp();
   const ids = tasks.map((task) => task.id);
+  const manageable = section.id !== "loose";
+  const index = sections.findIndex((item) => item.id === section.id);
+  const last = sections.length < 2;
+  const [renaming, setRenaming] = useState(false);
+  const [draft, setDraft] = useState(section.name);
+  const [error, setError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const busy = useRef(false);
+  const plan = manageable ? sectionDeletePlan(sections, section.id) : null;
+  const target = plan && "targetId" in plan ? sections.find((item) => item.id === plan.targetId) : null;
+
+  function startRename() {
+    busy.current = false;
+    setDraft(section.name);
+    setError(null);
+    setRenaming(true);
+  }
+
+  function cancelRename() {
+    busy.current = true;
+    setDraft(section.name);
+    setError(null);
+    setRenaming(false);
+  }
+
+  async function commitRename() {
+    if (busy.current) return;
+    busy.current = true;
+    if (draft.trim() === section.name) {
+      setError(null);
+      setRenaming(false);
+      return;
+    }
+    const result = await renameSection(section, draft);
+    if (result.status !== "saved") {
+      busy.current = false;
+      setError(result.status === "error" ? result.message : "Not saved");
+      return;
+    }
+    setError(null);
+    setRenaming(false);
+    await app.refreshLists();
+  }
+
+  function moveSection(direction: -1 | 1) {
+    const next = movedIds(
+      sections.map((item) => item.id),
+      section.id,
+      direction,
+    );
+    if (!next) return;
+    void reorderSections(next)
+      .then(() => app.refreshLists())
+      .catch(() => setError("Not saved"));
+  }
+
   return (
     <section>
-      <h2 className="group-label">{section.name}</h2>
+      {renaming ? (
+        <input
+          className="field"
+          value={draft}
+          maxLength={80}
+          aria-label={`Rename ${section.name}`}
+          autoFocus
+          onFocus={(event) => event.currentTarget.select()}
+          onChange={(event) => setDraft(event.target.value)}
+          onBlur={() => void commitRename()}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.preventDefault();
+              event.stopPropagation();
+              cancelRename();
+              return;
+            }
+            if (event.key === "Enter") {
+              event.preventDefault();
+              void commitRename();
+            }
+          }}
+        />
+      ) : (
+        <h2 className="group-label">{section.name}</h2>
+      )}
+      {manageable ? (
+        <div className="mt-1 flex flex-wrap gap-1">
+          <Button
+            small
+            aria-label={`Move ${section.name} up`}
+            aria-disabled={index <= 0}
+            disabled={index <= 0}
+            onClick={() => moveSection(-1)}
+          >
+            Up
+          </Button>
+          <Button
+            small
+            aria-label={`Move ${section.name} down`}
+            aria-disabled={index < 0 || index >= sections.length - 1}
+            disabled={index < 0 || index >= sections.length - 1}
+            onClick={() => moveSection(1)}
+          >
+            Down
+          </Button>
+          <Button small aria-label={`Rename ${section.name}`} onClick={startRename}>
+            Rename
+          </Button>
+          <Button
+            small
+            aria-label={`Delete ${section.name}`}
+            aria-disabled={last}
+            disabled={last}
+            onClick={() => {
+              if (last || !target) return;
+              setDeleting(true);
+            }}
+          >
+            Delete
+          </Button>
+        </div>
+      ) : null}
+      {error ? <p className="meta text-danger">{error}</p> : null}
+      {deleting && target ? (
+        <DeleteSectionDialog
+          section={section}
+          targetName={target.name}
+          onClose={() => setDeleting(false)}
+          onDeleted={async () => {
+            setDeleting(false);
+            await app.refreshLists();
+            app.bump();
+          }}
+        />
+      ) : null}
       {tasks.map((task) => (
         <div key={task.id} className="flex items-center gap-1">
           <div className="min-w-0 flex-1">
@@ -231,6 +355,44 @@ function SectionBlock({
         </div>
       ))}
     </section>
+  );
+}
+
+function DeleteSectionDialog({
+  section,
+  targetName,
+  onClose,
+  onDeleted,
+}: {
+  section: Section;
+  targetName: string;
+  onClose: () => void;
+  onDeleted: () => Promise<void>;
+}) {
+  const [error, setError] = useState<string | null>(null);
+
+  async function remove() {
+    const result = await deleteSection(section.id, section.listId);
+    if (result.status !== "saved") {
+      setError(result.status === "error" ? result.message : "Not saved");
+      return;
+    }
+    await onDeleted();
+  }
+
+  return (
+    <Dialog title="Delete section?" onClose={onClose}>
+      <p>Tasks in this section move to {targetName}.</p>
+      {error ? <p className="meta mt-2 text-danger">{error}</p> : null}
+      <div className="mt-4 flex gap-2">
+        <Button variant="danger" onClick={() => void remove()}>
+          Delete
+        </Button>
+        <Button variant="secondary" onClick={onClose}>
+          Cancel
+        </Button>
+      </div>
+    </Dialog>
   );
 }
 

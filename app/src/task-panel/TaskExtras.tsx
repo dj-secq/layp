@@ -6,8 +6,8 @@ import { historyForTask, type HistoryRow } from "../db/history";
 import { createTag, loadTags, setTaskTag, tagsForTask, type Tag } from "../db/tags";
 import { completeTask, createTask, reopenTask, tasksPresent } from "../db/tasks";
 import type { Task } from "../db/types";
-import { STICKERS } from "../lib/stickers";
-import { subtaskTree, type SubtaskNode } from "../lib/subtasks";
+import { STICKERS } from "@layp/shared";
+import { subtaskTree, type SubtaskNode } from "@layp/shared";
 import { useApp } from "../state/AppState";
 
 export function TagPicker({ taskId }: { taskId: string }) {

@@ -1,8 +1,8 @@
 import { Temporal } from "temporal-polyfill";
 import { z } from "zod";
-import { nowIso } from "../lib/clock";
-import { pausedOnLaunch, type TimerPhase, type TimerSnapshot } from "../lib/pomo";
-import { logFailure, query, run } from "./client";
+import { nowIso } from "@layp/shared";
+import { pausedOnLaunch, type TimerPhase, type TimerSnapshot } from "@layp/shared";
+import { logFailure, query, run, writeStamped } from "./client";
 
 const phase = z.enum(["idle", "work", "break"]);
 
@@ -51,16 +51,21 @@ export async function recordFocus(taskId: string | null, minutes: number): Promi
   const ended = Temporal.Now.instant();
   const started = ended.subtract({ minutes });
   try {
-    await run(
-      `INSERT INTO focus_sessions (id, task_id, started_at, ended_at, minutes) VALUES ($1, $2, $3, $4, $5)`,
-      [crypto.randomUUID(), taskId, started.toString(), ended.toString(), minutes],
-    );
-    if (taskId) {
-      await run(`UPDATE tasks SET completed_pomos = completed_pomos + 1, updated_at = $1 WHERE id = $2 AND deleted_at IS NULL`, [
-        nowIso(),
-        taskId,
-      ]);
-    }
+    await writeStamped((stamp) => {
+      const statements = [
+        {
+          sql: `INSERT INTO focus_sessions (id, task_id, started_at, ended_at, minutes, updated_at) VALUES ($1, $2, $3, $4, $5, $6)`,
+          values: [crypto.randomUUID(), taskId, started.toString(), ended.toString(), minutes, stamp],
+        },
+      ];
+      if (taskId) {
+        statements.push({
+          sql: `UPDATE tasks SET completed_pomos = completed_pomos + 1, updated_at = $1 WHERE id = $2 AND deleted_at IS NULL`,
+          values: [stamp, taskId],
+        });
+      }
+      return statements;
+    });
   } catch {
     await logFailure("focus save failed");
   }

@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { nowIso } from "../lib/clock";
-import { logFailure, query, run } from "./client";
+import { logFailure, query, withStamp, writeStamped } from "./client";
+import { recordDeletion } from "./deletions";
 import type { SaveResult } from "./types";
 
 const count = z.union([z.number(), z.string()]).transform((value) => Number(value));
@@ -90,10 +90,12 @@ export async function addReminder(taskId: string, minutesBefore: number): Promis
     }
     if (existing.length >= 10) return { status: "error", message: "A task can have 10 reminders." };
     const id = crypto.randomUUID();
-    await run(
-      `INSERT INTO reminders (id, task_id, minutes_before, fired_at, created_at) VALUES ($1, $2, $3, NULL, $4)`,
-      [id, taskId, minutesBefore, nowIso()],
-    );
+    await writeStamped((stamp) => [
+      {
+        sql: `INSERT INTO reminders (id, task_id, minutes_before, fired_at, created_at, updated_at) VALUES ($1, $2, $3, NULL, $4, $4)`,
+        values: [id, taskId, minutesBefore, stamp],
+      },
+    ]);
     return { status: "saved", row: { id, minutesBefore } };
   } catch {
     await logFailure("reminder failed");
@@ -102,9 +104,14 @@ export async function addReminder(taskId: string, minutesBefore: number): Promis
 }
 
 export async function removeReminder(id: string): Promise<SaveResult<{ id: string }>> {
+  const rows = await query<{ id: string }>(`SELECT id FROM reminders WHERE id = $1`, [id]);
+  if (rows.length === 0) return { status: "error", message: "Not saved" };
   try {
-    const affected = await run(`DELETE FROM reminders WHERE id = $1`, [id]);
-    if (affected === 0) return { status: "error", message: "Not saved" };
+    await withStamp(async (stamp, run) => {
+      await recordDeletion("reminders", id, stamp, run, [
+        { sql: `DELETE FROM reminders WHERE id = $1`, values: [id] },
+      ]);
+    });
     return { status: "saved", row: { id } };
   } catch {
     await logFailure("reminder failed");
@@ -138,9 +145,18 @@ export async function loadUnfiredChecklistReminders(): Promise<OpenReminder[]> {
 
 export async function markFired(ids: string[]): Promise<void> {
   if (ids.length === 0) return;
-  const stamp = nowIso();
   const marks = ids.map((_, index) => `$${index + 2}`).join(", ");
-  const values: unknown[] = [stamp, ...ids];
-  await run(`UPDATE reminders SET fired_at = $1 WHERE fired_at IS NULL AND id IN (${marks})`, values);
-  await run(`UPDATE checklist_reminders SET fired_at = $1 WHERE fired_at IS NULL AND id IN (${marks})`, values);
+  await writeStamped((stamp) => {
+    const values = [stamp, ...ids];
+    return [
+      {
+        sql: `UPDATE reminders SET fired_at = $1, updated_at = $1 WHERE fired_at IS NULL AND id IN (${marks})`,
+        values,
+      },
+      {
+        sql: `UPDATE checklist_reminders SET fired_at = $1, updated_at = $1 WHERE fired_at IS NULL AND id IN (${marks})`,
+        values,
+      },
+    ];
+  });
 }

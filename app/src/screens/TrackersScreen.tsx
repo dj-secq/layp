@@ -13,13 +13,16 @@ import {
   logsBetween,
   logsForTracker,
   restoreTracker,
+  trackerLogCounts,
+  updateTracker,
   upsertLog,
   type Tracker,
   type TrackerLog,
 } from "../db/trackers";
-import { monthCells, monthLabel, shiftMonth, weekdayLabels } from "../lib/dates";
-import { cellScheduled, streak, type Schedule, type TrackerKind } from "../lib/journal";
-import { DEFAULT_LIST_COLOR, STICKERS, stickerName } from "../lib/stickers";
+import type { SaveResult } from "../db/types";
+import { monthCells, monthLabel, shiftMonth, weekdayLabels } from "@layp/shared";
+import { cellScheduled, streak, type Schedule, type TrackerKind } from "@layp/shared";
+import { DEFAULT_LIST_COLOR, STICKERS, stickerName } from "@layp/shared";
 import { useApp } from "../state/AppState";
 
 const KINDS: Array<{ id: TrackerKind; label: string }> = [
@@ -40,6 +43,8 @@ export function TrackersScreen() {
   const [logs, setLogs] = useState<TrackerLog[]>([]);
   const [streaks, setStreaks] = useState<Map<string, string>>(new Map());
   const [error, setError] = useState<string | null>(null);
+  const [logCounts, setLogCounts] = useState<Map<string, number>>(new Map());
+  const [editingId, setEditingId] = useState<string | null>(null);
   const view = useViewLoad(`${cursor.year}-${cursor.month}`);
   const [edit, setEdit] = useState<{ trackerId: string; day: string } | null>(null);
 
@@ -52,8 +57,8 @@ export function TrackersScreen() {
     const from = first.toString();
     const to = first.with({ day: first.daysInMonth }).toString();
     let cancel = false;
-    Promise.all([loadTrackers(true), logsBetween(from, to)])
-      .then(async ([nextTrackers, nextLogs]) => {
+    Promise.all([loadTrackers(true), logsBetween(from, to), trackerLogCounts()])
+      .then(async ([nextTrackers, nextLogs, counts]) => {
         if (cancel) return;
         const activeRows = nextTrackers.filter((tracker) => !tracker.isHobby && !tracker.archivedAt);
         const pairs = await Promise.all(activeRows.map(async (tracker) => [tracker.id, await logsForTracker(tracker.id)] as const));
@@ -61,6 +66,7 @@ export function TrackersScreen() {
         view.settle(() => {
           setTrackers(nextTrackers);
           setLogs(nextLogs);
+          setLogCounts(counts);
           setStreaks(
             new Map(
               pairs.map(([id, rows]) => {
@@ -125,18 +131,47 @@ export function TrackersScreen() {
                 {tracker.kind} · {streaks.get(tracker.id) ?? ""}
               </span>
             </h2>
-            <Button
-              variant="secondary"
-              onClick={() => {
-                void archiveTracker(tracker).then((result) => {
-                  if (result.status === "saved") app.bump();
-                  else setError(result.status === "error" ? result.message : "Not saved");
-                });
-              }}
-            >
-              Archive
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="secondary"
+                aria-label={`Edit ${tracker.name}`}
+                onClick={() => setEditingId((current) => (current === tracker.id ? null : tracker.id))}
+              >
+                Edit
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  void archiveTracker(tracker).then((result) => {
+                    if (result.status === "saved") app.bump();
+                    else setError(result.status === "error" ? result.message : "Not saved");
+                  });
+                }}
+              >
+                Archive
+              </Button>
+            </div>
           </div>
+          {editingId === tracker.id ? (
+            <TrackerForm
+              key={tracker.updatedAt}
+              initial={{
+                name: tracker.name,
+                kind: tracker.kind,
+                unit: tracker.unit ?? "",
+                target: tracker.dailyTarget === null ? "" : String(tracker.dailyTarget),
+                schedule: tracker.schedule,
+                color: tracker.color,
+              }}
+              kindLocked={(logCounts.get(tracker.id) ?? 0) > 0}
+              submitLabel="Save"
+              framed={false}
+              onSubmit={(input) => updateTracker(tracker, input)}
+              onSaved={() => setEditingId(null)}
+              onCancel={() => setEditingId(null)}
+              onError={setError}
+            />
+          ) : null}
           <div className="tracker-grid">
             {weekdayLabels(app.settings.weekStart).map((label) => (
               <span key={label} className="meta text-center">
@@ -335,39 +370,95 @@ function LogEditor({
 }
 
 function AddTracker({ onError }: { onError: (message: string | null) => void }) {
-  const app = useApp();
-  const [name, setName] = useState("");
-  const [kind, setKind] = useState<TrackerKind>("check");
-  const [unit, setUnit] = useState("");
-  const [target, setTarget] = useState("");
-  const [mode, setMode] = useState<Schedule["type"]>("daily");
-  const [days, setDays] = useState<number[]>([1, 2, 3, 4, 5]);
-  const [count, setCount] = useState("4");
-  const [color, setColor] = useState(DEFAULT_LIST_COLOR);
-  const [rowError, setRowError] = useState<string | null>(null);
+  return (
+    <TrackerForm
+      initial={{
+        name: "",
+        kind: "check",
+        unit: "",
+        target: "",
+        schedule: { type: "daily" },
+        color: DEFAULT_LIST_COLOR,
+      }}
+      kindLocked={false}
+      submitLabel="Add a row"
+      clearNameOnSave
+      onSubmit={createTracker}
+      onError={onError}
+    />
+  );
+}
 
+export function TrackerForm({
+  initial,
+  kindLocked,
+  submitLabel,
+  clearNameOnSave = false,
+  framed = true,
+  onSubmit,
+  onSaved,
+  onCancel,
+  onError,
+}: {
+  initial: {
+    name: string;
+    kind: TrackerKind;
+    unit: string;
+    target: string;
+    schedule: Schedule;
+    color: string;
+  };
+  kindLocked: boolean;
+  submitLabel: string;
+  clearNameOnSave?: boolean;
+  framed?: boolean;
+  onSubmit: (input: {
+    name: string;
+    kind: TrackerKind;
+    unit: string;
+    target: string;
+    schedule: Schedule;
+    color: string;
+  }) => Promise<SaveResult<Tracker>>;
+  onSaved?: () => void;
+  onCancel?: () => void;
+  onError: (message: string | null) => void;
+}) {
+  const app = useApp();
+  const [name, setName] = useState(initial.name);
+  const [kind, setKind] = useState<TrackerKind>(initial.kind);
+  const [unit, setUnit] = useState(initial.unit);
+  const [target, setTarget] = useState(initial.target);
+  const [mode, setMode] = useState<Schedule["type"]>(initial.schedule.type);
+  const [days, setDays] = useState<number[]>(initial.schedule.type === "weekdays" ? [...initial.schedule.days] : [1, 2, 3, 4, 5]);
+  const [count, setCount] = useState(initial.schedule.type === "weekly_count" ? String(initial.schedule.count) : "4");
+  const [color, setColor] = useState(initial.color);
+  const [rowError, setRowError] = useState<string | null>(null);
   const schedule: Schedule =
     mode === "weekdays" ? { type: "weekdays", days } : mode === "weekly_count" ? { type: "weekly_count", count: Number(count) } : { type: "daily" };
 
-  async function add() {
-    const result = await createTracker({ name, kind, unit, target, schedule, color });
-    if (result.status !== "saved") {
-      const message = result.status === "error" ? result.message : "Not saved";
-      setRowError(message);
-      onError(message);
+  async function save() {
+    const result = await onSubmit({ name, kind, unit, target, schedule, color });
+    if (result.status === "saved") {
+      setRowError(null);
+      onError(null);
+      if (clearNameOnSave) setName("");
+      app.bump();
+      onSaved?.();
       return;
     }
-    setName("");
-    setRowError(null);
-    app.bump();
+    if (result.status === "conflict") app.bump();
+    const message = result.status === "error" ? result.message : "Not saved";
+    setRowError(message);
+    onError(message);
   }
 
   return (
     <form
-      className="panel grid gap-3"
+      className={framed ? "panel grid gap-3" : "grid gap-3"}
       onSubmit={(event) => {
         event.preventDefault();
-        void add();
+        void save();
       }}
     >
       <Field label="Name" value={name} maxLength={80} onChange={(event) => setName(event.target.value)} />
@@ -375,9 +466,11 @@ function AddTracker({ onError }: { onError: (message: string | null) => void }) 
         stack
         label="Kind"
         value={kind}
+        disabled={kindLocked}
         options={KINDS.map((item) => ({ value: item.id, label: item.label }))}
         onChange={(value) => setKind(value as TrackerKind)}
       />
+      {kindLocked ? <p className="meta">Kind stays after the first log.</p> : null}
       {kind === "number" ? <Field label="Unit" value={unit} maxLength={20} onChange={(event) => setUnit(event.target.value)} /> : null}
       {kind === "count" || kind === "number" || kind === "minutes" ? (
         <Field label="Target" value={target} onChange={(event) => setTarget(event.target.value)} />
@@ -427,10 +520,15 @@ function AddTracker({ onError }: { onError: (message: string | null) => void }) 
         ))}
       </div>
       {rowError ? <p className="meta text-danger">{rowError}</p> : null}
-      <div>
+      <div className="flex gap-2">
         <Button variant="primary" type="submit">
-          Add a row
+          {submitLabel}
         </Button>
+        {onCancel ? (
+          <Button variant="secondary" onClick={onCancel}>
+            Cancel
+          </Button>
+        ) : null}
       </div>
     </form>
   );

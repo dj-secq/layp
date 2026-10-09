@@ -1,19 +1,20 @@
 import { getVersion } from "@tauri-apps/api/app";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { useEffect, useState } from "react";
+import { create } from "qrcode";
+import { useEffect, useState, type ReactNode } from "react";
 import { Button } from "../components/Button";
 import { Choice } from "../components/Choice";
 import { Dialog } from "../components/Dialog";
 import { useShortcutRegistered } from "../components/DesktopShell";
 import { Field } from "../components/Field";
-import { closeDatabase, databaseFile, openDatabase, run } from "../db/client";
+import { closeDatabase, databaseFile, openDatabase, query, run } from "../db/client";
 import { checkBackup, exportBackup, exportZip, failureText, importBackup, showDatabaseFolder, showLogFolder } from "../desktop/backup";
+import { phoneForget, phonePairingOffer, phoneSetEnabled, phoneStatus, type PhoneStatus } from "../desktop/phone";
 import { loadArchivedLists, purgeList, restoreList } from "../db/lists";
 import { deleteTag, loadTags, removeTagFromTasks, renameTag, tagUseCount, type Tag } from "../db/tags";
 import { themeNames, type Settings, type TaskList, type ThemeName } from "../db/types";
 import { playChime, unlockChime } from "../lib/chime";
-import { focusSounds, parseFocusSound, type FocusSound } from "../lib/focusSound";
-import { clampPomoMinutes } from "../lib/pomo";
+import { clampPomoMinutes, focusSounds, formatPairingCode, parseFocusSound, parsePairingCode, type FocusSound } from "@layp/shared";
 import { useApp } from "../state/AppState";
 
 const themeFaces: Record<ThemeName, { name: string; canvas: string; surface: string; ink: string }> = {
@@ -205,9 +206,263 @@ export function SettingsScreen() {
         </div>
       </section>
 
+      <PhoneSettings />
+
       <AboutLayp />
       </div>
     </>
+  );
+}
+
+function PairingQr({ text }: { text: string }) {
+  const qr = create(text);
+  const size = qr.modules.size;
+  const cells: ReactNode[] = [];
+  for (let row = 0; row < size; row += 1) {
+    for (let col = 0; col < size; col += 1) {
+      if (qr.modules.get(row, col)) cells.push(<rect key={`${row}-${col}`} x={col} y={row} width={1} height={1} />);
+    }
+  }
+  return (
+    <svg role="img" aria-label={text} viewBox={`0 0 ${size} ${size}`} width={180} height={180} shapeRendering="crispEdges">
+      <rect width={size} height={size} fill="#ffffff" />
+      <g fill="#1c1b19">{cells}</g>
+    </svg>
+  );
+}
+
+export function PhonePanel({
+  enabled,
+  listening,
+  host,
+  port,
+  otherIpv4,
+  code,
+  expiresAt,
+  pairedName,
+  lastSyncAt,
+  keyNote,
+  showForget,
+  error,
+  replaceOpen,
+  forgetOpen,
+  onToggle,
+  onMint,
+  onConfirmReplace,
+  onAskForget,
+  onForget,
+  onCloseReplace,
+  onCloseForget,
+}: {
+  enabled: boolean;
+  listening: boolean;
+  host: string;
+  port: number;
+  otherIpv4: string[];
+  code: string | null;
+  expiresAt: string | null;
+  pairedName: string | null;
+  lastSyncAt: string | null;
+  keyNote: string | null;
+  showForget: boolean;
+  error: string | null;
+  replaceOpen: boolean;
+  forgetOpen: boolean;
+  onToggle: (value: string) => void;
+  onMint: () => void;
+  onConfirmReplace: () => void;
+  onAskForget: () => void;
+  onForget: () => void;
+  onCloseReplace: () => void;
+  onCloseForget: () => void;
+}) {
+  return (
+    <section className="settings-group">
+      <h2 className="page-title">Phone</h2>
+      <p>Export a backup before the first pairing.</p>
+      {error ? <p className="meta text-danger">{error}</p> : null}
+      <Choice
+        label="Phone link"
+        value={enabled ? "on" : "off"}
+        options={[
+          { value: "off", label: "Off" },
+          { value: "on", label: "On" },
+        ]}
+        onChange={onToggle}
+      />
+      {pairedName ? (
+        <p>
+          Paired with {pairedName}. {lastSyncAt ? `Last sync ${lastSyncAt}.` : "No sync yet."}
+        </p>
+      ) : null}
+      {keyNote ? <p>{keyNote}</p> : null}
+      {listening ? (
+        <>
+          <p>
+            Listening at {host}:{port}
+          </p>
+          {otherIpv4.length > 0 ? <p>Other addresses: {otherIpv4.join(", ")}</p> : null}
+          {code ? (
+            <>
+              <PairingQr text={code} />
+              <input className="field" readOnly value={code} aria-label="Pairing code" />
+              {expiresAt ? <p className="meta">Code expires {expiresAt}</p> : null}
+            </>
+          ) : null}
+        </>
+      ) : null}
+      {listening || showForget ? (
+        <div className="flex flex-wrap gap-2">
+          {listening ? (
+            <Button variant="secondary" onClick={onMint}>
+              New code
+            </Button>
+          ) : null}
+          {showForget ? (
+            <Button variant="danger" onClick={onAskForget}>
+              Forget
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+      {replaceOpen ? (
+        <Dialog title="Replace the paired phone?" onClose={onCloseReplace}>
+          <p>The current code stops working.</p>
+          <div className="mt-4 flex gap-2">
+            <Button variant="danger" onClick={onConfirmReplace}>
+              Replace
+            </Button>
+            <Button variant="secondary" onClick={onCloseReplace}>
+              Cancel
+            </Button>
+          </div>
+        </Dialog>
+      ) : null}
+      {forgetOpen ? (
+        <Dialog title="Forget this phone?" onClose={onCloseForget}>
+          <p>The phone keeps the copy it already has and will not receive new rows.</p>
+          <div className="mt-4 flex gap-2">
+            <Button variant="danger" onClick={onForget}>
+              Forget
+            </Button>
+            <Button variant="secondary" onClick={onCloseForget}>
+              Cancel
+            </Button>
+          </div>
+        </Dialog>
+      ) : null}
+    </section>
+  );
+}
+
+function PhoneSettings() {
+  const app = useApp();
+  const [status, setStatus] = useState<PhoneStatus | null>(null);
+  const [paired, setPaired] = useState<{ name: string; lastSyncAt: string | null } | null>(null);
+  const [code, setCode] = useState<string | null>(null);
+  const [expiresAt, setExpiresAt] = useState<string | null>(null);
+  const [localError, setLocalError] = useState<string | null>(null);
+  const [replaceOpen, setReplaceOpen] = useState(false);
+  const [forgetOpen, setForgetOpen] = useState(false);
+
+  useEffect(() => {
+    let cancel = false;
+    void (async () => {
+      try {
+        const [nextStatus, rows] = await Promise.all([
+          phoneStatus(),
+          query<{ name: string; last_sync_at: string | null }>("SELECT name, last_sync_at FROM paired_phone WHERE id = 'phone'"),
+        ]);
+        if (cancel) return;
+        setStatus(nextStatus);
+        setPaired(rows[0] ? { name: rows[0].name, lastSyncAt: rows[0].last_sync_at } : null);
+      } catch {
+        if (!cancel) setLocalError("Phone status could not be read.");
+      }
+    })();
+    return () => {
+      cancel = true;
+    };
+  }, [app.revision, app.settings.phoneLink]);
+
+  async function onToggle(next: string) {
+    setLocalError(null);
+    if (next === "on") {
+      try {
+        await phoneSetEnabled(true);
+        await app.updateSettings({ phoneLink: true });
+        app.setPhoneError(null);
+      } catch (err) {
+        await phoneSetEnabled(false).catch(() => undefined);
+        app.setPhoneError(failureText(err, "Phone did not start."));
+      }
+      return;
+    }
+    try {
+      await phoneSetEnabled(false);
+      await app.updateSettings({ phoneLink: false });
+      app.setPhoneError(null);
+      setCode(null);
+      setExpiresAt(null);
+    } catch (err) {
+      setLocalError(failureText(err, "Phone did not stop."));
+    }
+  }
+
+  async function mint(replace: boolean) {
+    setLocalError(null);
+    try {
+      const offer = await phonePairingOffer(replace);
+      const parsed = parsePairingCode(offer.code);
+      if (!parsed) throw new Error("The pairing code was not valid.");
+      setCode(formatPairingCode(parsed));
+      setExpiresAt(offer.expiresAt);
+      setReplaceOpen(false);
+    } catch (err) {
+      setLocalError(failureText(err, "Could not make a pairing code."));
+    }
+  }
+
+  async function forget() {
+    setLocalError(null);
+    try {
+      await phoneForget();
+      setCode(null);
+      setExpiresAt(null);
+      setForgetOpen(false);
+    } catch (err) {
+      setLocalError(failureText(err, "Could not forget the phone."));
+    }
+  }
+
+  const keyNote = status?.keyExists && !paired ? "The key is unused." : paired && status && !status.keyExists ? "The key is missing." : null;
+  return (
+    <PhonePanel
+      enabled={app.settings.phoneLink}
+      listening={Boolean(status?.on)}
+      host={status?.host ?? ""}
+      port={status?.port ?? 0}
+      otherIpv4={status?.otherIpv4 ?? []}
+      code={code}
+      expiresAt={expiresAt}
+      pairedName={paired?.name ?? null}
+      lastSyncAt={paired?.lastSyncAt ?? null}
+      keyNote={keyNote}
+      showForget={Boolean(paired) || Boolean(status?.keyExists)}
+      error={localError ?? app.phoneError}
+      replaceOpen={replaceOpen}
+      forgetOpen={forgetOpen}
+      onToggle={(value) => void onToggle(value)}
+      onMint={() => {
+        if (paired || status?.keyExists) setReplaceOpen(true);
+        else void mint(false);
+      }}
+      onConfirmReplace={() => void mint(true)}
+      onAskForget={() => setForgetOpen(true)}
+      onForget={() => void forget()}
+      onCloseReplace={() => setReplaceOpen(false)}
+      onCloseForget={() => setForgetOpen(false)}
+    />
   );
 }
 

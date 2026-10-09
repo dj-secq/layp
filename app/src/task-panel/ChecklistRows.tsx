@@ -8,9 +8,9 @@ import {
   removeChecklistReminder,
   type ChecklistReminder,
 } from "../db/checklistReminders";
-import { checklistLines, toggleChecklistLine } from "../lib/checklist";
-import { parseClock } from "../lib/clock";
-import { reminderLabel } from "../lib/remind";
+import { checklistLines, toggleChecklistLine } from "@layp/shared";
+import { parseClock } from "@layp/shared";
+import { reminderLabel } from "@layp/shared";
 import { useApp } from "../state/AppState";
 
 export function ChecklistRows({

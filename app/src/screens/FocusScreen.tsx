@@ -6,7 +6,7 @@ import { useFocus } from "../components/FocusTimer";
 import { sessionsBetween } from "../db/focus";
 import { tasksOpen } from "../db/tasks";
 import type { Task } from "../db/types";
-import { clampPomoMinutes, formatRemaining } from "../lib/pomo";
+import { clampPomoMinutes, formatRemaining } from "@layp/shared";
 import { useApp } from "../state/AppState";
 
 const PRESETS = [

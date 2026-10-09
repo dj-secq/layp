@@ -3,8 +3,8 @@ import { listen } from "@tauri-apps/api/event";
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { loadTimer, recordFocus, saveTimer } from "../db/focus";
 import { playChime, unlockChime } from "../lib/chime";
-import { clipForTransition } from "../lib/focusSound";
-import { freshTimer, skipPhase, stepTimer, type TimerSnapshot } from "../lib/pomo";
+import { clipForTransition } from "@layp/shared";
+import { freshTimer, skipPhase, stepTimer, type TimerSnapshot } from "@layp/shared";
 import { useApp } from "../state/AppState";
 
 type FocusApi = {

@@ -3,7 +3,7 @@ import { Skeleton, useViewLoad } from "../components/Skeleton";
 import { TaskRow } from "../components/TaskRow";
 import { completeTask, reopenTask, tasksUpcoming } from "../db/tasks";
 import type { Task } from "../db/types";
-import { addDays, formatDay } from "../lib/dates";
+import { addDays, formatDay } from "@layp/shared";
 import { useApp } from "../state/AppState";
 
 export function UpcomingScreen() {

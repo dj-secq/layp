@@ -6,7 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
-pub const SCHEMA_VERSION: u64 = 4;
+pub const SCHEMA_VERSION: u64 = 5;
 const MAX_BACKUP_BYTES: u64 = 512 * 1024 * 1024;
 
 pub struct BackupSource {

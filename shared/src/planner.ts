@@ -1,6 +1,6 @@
 import { Temporal } from "temporal-polyfill";
 import { addDays } from "./dates";
-import type { Priority } from "../db/types";
+import type { Priority } from "./rows";
 
 export type TaskSort = "manual" | "due" | "priority" | "created";
 

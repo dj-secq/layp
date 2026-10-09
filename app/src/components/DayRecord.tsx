@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { getDay, saveDay } from "../db/days";
 import { emptyDay, type Day } from "../db/types";
-import { MOOD_COLORS } from "../lib/stickers";
-import { formatClock, parseClock } from "../lib/clock";
+import { MOOD_COLORS } from "@layp/shared";
+import { formatClock, parseClock } from "@layp/shared";
 import { useApp } from "../state/AppState";
-import { cleanSleep, formatHours, suggestedSleepHours } from "../lib/sleep";
+import { cleanSleep, formatHours, suggestedSleepHours } from "@layp/shared";
 import { Button } from "./Button";
 import { Skeleton } from "./Skeleton";
 import { DayTrackers } from "./DayTrackers";

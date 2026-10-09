@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { nowIso } from "../lib/clock";
+import { nowIso } from "@layp/shared";
 import { logFailure, query, run } from "./client";
 
 const rowSchema = z.object({

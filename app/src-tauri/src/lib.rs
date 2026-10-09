@@ -1,5 +1,9 @@
 mod attachments;
 mod backup;
+mod db_tx;
+mod phone;
+#[cfg(test)]
+mod schema_v5;
 mod tray;
 
 use std::path::PathBuf;
@@ -18,7 +22,7 @@ struct DatabaseFile {
     exists: bool,
 }
 
-fn config_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+pub(crate) fn config_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let dir = app.path().app_config_dir().map_err(|err| err.to_string())?;
     std::fs::create_dir_all(&dir).map_err(|err| format!("{}: {err}", dir.display()))?;
     Ok(dir)
@@ -298,6 +302,12 @@ pub fn run() {
             sql: include_str!("../migrations/004_fts.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 5,
+            description: "phone_link",
+            sql: include_str!("../migrations/005_phone.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()
@@ -331,6 +341,7 @@ pub fn run() {
                 .build(),
         )
         .setup(|app| {
+            app.manage(phone::PhoneLink::new());
             tray::setup(app.handle());
             Ok(())
         })
@@ -349,7 +360,14 @@ pub fn run() {
             show_database_folder,
             show_log_folder,
             set_tray_timer,
-            ensure_on_screen
+            ensure_on_screen,
+            db_tx::sql_transaction,
+            phone::phone_set_enabled,
+            phone::phone_status,
+            phone::phone_pairing_offer,
+            phone::phone_forget,
+            phone::phone_kick,
+            phone::phone_reply
         ])
         .run(tauri::generate_context!())
         .expect("error while running Layp");

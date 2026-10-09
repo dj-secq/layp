@@ -12,11 +12,12 @@ import {
   loadTrackers,
   logsForTracker,
   restoreTracker,
+  updateHobby,
   type Tracker,
   type TrackerLog,
 } from "../db/trackers";
-import { sumMinutes, weekBounds, weekBuckets } from "../lib/journal";
-import { DEFAULT_LIST_COLOR, STICKERS, stickerName } from "../lib/stickers";
+import { sumMinutes, weekBounds, weekBuckets } from "@layp/shared";
+import { DEFAULT_LIST_COLOR, STICKERS, stickerName } from "@layp/shared";
 import { useApp } from "../state/AppState";
 
 export function HobbiesScreen() {
@@ -187,6 +188,7 @@ function HobbyDetail({ hobby, onDeleted }: { hobby: Tracker; onDeleted: () => vo
   return (
     <section className="panel grid gap-3" aria-label={`${hobby.name} detail`}>
       <h2 className="page-title">{hobby.name}</h2>
+      <HobbyFields key={`${hobby.id}:${hobby.updatedAt}`} hobby={hobby} />
       <div className="week-bar" aria-label="12 week minutes">
         {buckets.map((bucket, index) => (
           <span key={bucket.start} style={{ height: `${Math.max(8, (totals[index] / peak) * 100)}%` }} title={`${totals[index]} minutes`}>
@@ -238,6 +240,52 @@ function HobbyDetail({ hobby, onDeleted }: { hobby: Tracker; onDeleted: () => vo
         />
       ) : null}
     </section>
+  );
+}
+
+export function HobbyFields({ hobby }: { hobby: Tracker }) {
+  const app = useApp();
+  const [name, setName] = useState(hobby.name);
+  const [color, setColor] = useState(hobby.color);
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <form
+      className="grid gap-3"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void updateHobby(hobby, name, color).then((result) => {
+          if (result.status === "saved") {
+            setError(null);
+            app.bump();
+            return;
+          }
+          if (result.status === "conflict") app.bump();
+          setError(result.status === "error" ? result.message : "Not saved");
+        });
+      }}
+    >
+      <Field label="Name" value={name} maxLength={80} onChange={(event) => setName(event.target.value)} />
+      <div className="flex flex-wrap gap-2">
+        {STICKERS.map((sticker) => (
+          <button
+            key={sticker.hex}
+            type="button"
+            className="swatch press-sm"
+            style={{ background: sticker.hex }}
+            aria-label={stickerName(sticker.hex)}
+            aria-pressed={color === sticker.hex}
+            onClick={() => setColor(sticker.hex)}
+          />
+        ))}
+      </div>
+      {error ? <p className="meta text-danger">{error}</p> : null}
+      <div>
+        <Button variant="primary" type="submit">
+          Save
+        </Button>
+      </div>
+    </form>
   );
 }
 

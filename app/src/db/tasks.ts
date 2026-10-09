@@ -1,13 +1,13 @@
 import { Temporal } from "temporal-polyfill";
-import { nowIso } from "../lib/clock";
-import { addDays } from "../lib/dates";
-import { anchorDate, nextDueDate, parseRule, ruleAfterComplete, serializeRule, type RecurrenceRule } from "../lib/recur";
-import { describeEdit } from "../lib/planner";
-import { parentCreatesCycle, type SubtaskLink } from "../lib/subtasks";
-import { cleanNotes, cleanTitle } from "../lib/validate";
+import { addDays } from "@layp/shared";
+import { nextOccurrenceDraft, parseRule, serializeRule, TASKS_FOR_DATE_WHERE, type RecurrenceRule } from "@layp/shared";
+import { describeEdit } from "@layp/shared";
+import { parentCreatesCycle, type SubtaskLink } from "@layp/shared";
+import { cleanNotes, cleanTitle } from "@layp/shared";
 import { attachmentIdsForTasks, dropStoredFiles, trashedAttachmentIds } from "./attachments";
-import { copyChecklistReminders, syncChecklistReminders } from "./checklistReminders";
-import { logFailure, query, run } from "./client";
+import { syncChecklistReminders } from "./checklistReminders";
+import { logFailure, query, withStamp, writeStamped, type SqlStatement } from "./client";
+import { deletionStatement } from "./deletions";
 import { recordHistory } from "./history";
 import { taskSchema, type Priority, type SaveResult, type Task } from "./types";
 
@@ -38,14 +38,7 @@ export async function tasksForList(listId: string): Promise<Task[]> {
 export async function tasksForDate(date: string, today: string): Promise<Task[]> {
   const rows = await query<unknown>(
     `SELECT ${TASK_COLUMNS} FROM tasks
-     WHERE deleted_at IS NULL AND parent_id IS NULL
-       AND list_id IN (SELECT id FROM lists WHERE archived_at IS NULL)
-       AND (
-         due_on = $1
-         OR start_on = $1
-         OR ($1 = $2 AND completed_at IS NULL AND pinned = 1)
-         OR ($1 = $2 AND completed_at IS NULL AND due_on IS NOT NULL AND due_on < $2)
-       )
+     WHERE ${TASKS_FOR_DATE_WHERE}
      ORDER BY sort_order ASC, created_at ASC`,
     [date, today],
   );
@@ -72,7 +65,6 @@ export async function createTask(input: NewTask): Promise<SaveResult<Task>> {
   const notes = cleanNotes(input.notes ?? "");
   if ("error" in notes) return { status: "error", message: notes.error };
   const id = crypto.randomUUID();
-  const stamp = nowIso();
   if (input.parentId) {
     try {
       const links = await taskLinks();
@@ -84,39 +76,16 @@ export async function createTask(input: NewTask): Promise<SaveResult<Task>> {
       return { status: "error", message: "Not saved" };
     }
   }
-  const task: Task = {
-    id,
-    seriesId: id,
-    listId: input.listId,
-    sectionId: input.sectionId,
-    parentId: input.parentId ?? null,
-    title: title.title,
-    notes: notes.notes,
-    priority: input.priority ?? "none",
-    important: input.important ?? false,
-    urgent: false,
-    pinned: false,
-    startOn: input.startOn ?? null,
-    dueOn: input.dueOn ?? null,
-    dueTime: input.dueTime ?? null,
-    durationMinutes: null,
-    recurrenceJson: input.recurrence ? serializeRule(input.recurrence) : null,
-    estimatedPomos: null,
-    completedPomos: 0,
-    sortOrder: 0,
-    completedAt: null,
-    deletedAt: null,
-    createdAt: stamp,
-    updatedAt: stamp,
-  };
+  const recurrenceJson = input.recurrence ? serializeRule(input.recurrence) : null;
   try {
     const maxRows = await query<{ max_sort: number | null }>(
       "SELECT COALESCE(MAX(sort_order), 0) AS max_sort FROM tasks WHERE list_id = $1",
       [input.listId],
     );
-    task.sortOrder = Number(maxRows[0]?.max_sort ?? 0) + 1;
-    await run(
-      `INSERT INTO tasks (
+    const sortOrder = Number(maxRows[0]?.max_sort ?? 0) + 1;
+    const { stamp } = await writeStamped((stamp) => [
+      {
+        sql: `INSERT INTO tasks (
          id, series_id, list_id, section_id, parent_id, title, notes, priority,
          important, urgent, pinned, start_on, due_on, due_time, duration_minutes, recurrence_json, estimated_pomos, completed_pomos,
          sort_order, completed_at, deleted_at, created_at, updated_at
@@ -125,25 +94,53 @@ export async function createTask(input: NewTask): Promise<SaveResult<Task>> {
          $7, 0, 0, $8, $9, $10, NULL, $11, NULL, 0,
          $12, NULL, NULL, $13, $13
        )`,
-      [
+        values: [
+          id,
+          input.listId,
+          input.sectionId,
+          title.title,
+          notes.notes,
+          input.priority ?? "none",
+          input.important ? 1 : 0,
+          input.startOn ?? null,
+          input.dueOn ?? null,
+          input.dueTime ?? null,
+          recurrenceJson,
+          sortOrder,
+          stamp,
+          input.parentId ?? null,
+        ],
+      },
+    ]);
+    return {
+      status: "saved",
+      row: {
         id,
-        task.listId,
-        task.sectionId,
-        task.title,
-        task.notes,
-        task.priority,
-        task.important ? 1 : 0,
-        task.startOn,
-        task.dueOn,
-        task.dueTime,
-        task.recurrenceJson,
-        task.sortOrder,
-        stamp,
-        task.parentId,
-      ],
-    );
-    return { status: "saved", row: task };
-  } catch (err) {
+        seriesId: id,
+        listId: input.listId,
+        sectionId: input.sectionId,
+        parentId: input.parentId ?? null,
+        title: title.title,
+        notes: notes.notes,
+        priority: input.priority ?? "none",
+        important: input.important ?? false,
+        urgent: false,
+        pinned: false,
+        startOn: input.startOn ?? null,
+        dueOn: input.dueOn ?? null,
+        dueTime: input.dueTime ?? null,
+        durationMinutes: null,
+        recurrenceJson,
+        estimatedPomos: null,
+        completedPomos: 0,
+        sortOrder,
+        completedAt: null,
+        deletedAt: null,
+        createdAt: stamp,
+        updatedAt: stamp,
+      },
+    };
+  } catch {
     await logFailure("task save failed");
     return { status: "error", message: "Not saved" };
   }
@@ -163,6 +160,7 @@ export type TaskPatch = {
   dueTime?: string | null;
   durationMinutes?: number | null;
   estimatedPomos?: number | null;
+  recurrence?: RecurrenceRule | null;
 };
 
 export async function patchTask(
@@ -181,8 +179,7 @@ export async function patchTask(
     patch = { ...patch, notes: notes.notes };
   }
   const sets = ["updated_at = $1"];
-  const stamp = nowIso();
-  const values: unknown[] = [stamp];
+  const values: unknown[] = [""];
   const add = (column: string, value: unknown) => {
     values.push(value);
     sets.push(`${column} = $${values.length}`);
@@ -205,19 +202,40 @@ export async function patchTask(
     }
     add("estimated_pomos", patch.estimatedPomos);
   }
+  let recurrenceJson: string | null | undefined;
+  if (patch.recurrence !== undefined) {
+    if (patch.recurrence === null) {
+      recurrenceJson = null;
+    } else {
+      const checked = parseRule(serializeRule(patch.recurrence));
+      if (!checked) return { status: "error", message: "Not saved" };
+      recurrenceJson = serializeRule(checked);
+    }
+    add("recurrence_json", recurrenceJson);
+  }
   values.push(task.id);
   let sql = `UPDATE tasks SET ${sets.join(", ")} WHERE id = $${values.length} AND deleted_at IS NULL`;
   if (!force) {
     values.push(task.updatedAt);
     sql += ` AND updated_at = $${values.length}`;
   }
+  const resetReminders = patch.dueOn !== undefined || patch.dueTime !== undefined;
   try {
-    const affected = await run(sql, values);
-    if (affected === 0) {
+    const saved = await withStamp(async (stamp, run) => {
+      const statements: SqlStatement[] = [{ sql, values: [stamp, ...values.slice(1)] }];
+      if (resetReminders) {
+        statements.push({
+          sql: `UPDATE reminders SET fired_at = NULL, updated_at = $1
+                WHERE task_id = $2
+                  AND EXISTS (SELECT 1 FROM tasks WHERE id = $2 AND deleted_at IS NULL AND updated_at = $1)`,
+          values: [stamp, task.id],
+        });
+      }
+      const result = await run(statements);
+      return { stamp, affected: result.batches[0]?.rowsAffected ?? 0 };
+    });
+    if (saved.affected === 0) {
       return { status: "conflict", current: await getTask(task.id) };
-    }
-    if (patch.dueOn !== undefined || patch.dueTime !== undefined) {
-      await run(`UPDATE reminders SET fired_at = NULL WHERE task_id = $1`, [task.id]);
     }
     if (patch.notes !== undefined && patch.notes !== task.notes) {
       await syncChecklistReminders(task.id, task.notes, patch.notes);
@@ -236,27 +254,42 @@ export async function patchTask(
       status: "saved",
       row: {
         ...task,
-        ...patch,
-        updatedAt: stamp,
+        ...(patch.title !== undefined ? { title: patch.title } : {}),
+        ...(patch.notes !== undefined ? { notes: patch.notes } : {}),
+        ...(patch.listId !== undefined ? { listId: patch.listId } : {}),
+        ...(patch.sectionId !== undefined ? { sectionId: patch.sectionId } : {}),
+        ...(patch.priority !== undefined ? { priority: patch.priority } : {}),
+        ...(patch.important !== undefined ? { important: patch.important } : {}),
+        ...(patch.urgent !== undefined ? { urgent: patch.urgent } : {}),
+        ...(patch.pinned !== undefined ? { pinned: patch.pinned } : {}),
+        ...(patch.startOn !== undefined ? { startOn: patch.startOn } : {}),
+        ...(patch.dueOn !== undefined ? { dueOn: patch.dueOn } : {}),
+        ...(patch.dueTime !== undefined ? { dueTime: patch.dueTime } : {}),
+        ...(patch.durationMinutes !== undefined ? { durationMinutes: patch.durationMinutes } : {}),
+        ...(patch.estimatedPomos !== undefined ? { estimatedPomos: patch.estimatedPomos } : {}),
+        ...(recurrenceJson !== undefined ? { recurrenceJson } : {}),
+        updatedAt: saved.stamp,
       },
     };
-  } catch (err) {
+  } catch {
     await logFailure("task save failed");
     return { status: "error", message: "Not saved" };
   }
 }
 
-async function stampTask(id: string, column: "completed_at" | "deleted_at", value: string | null): Promise<SaveResult<Task>> {
-  const stamp = nowIso();
+/** A clock value is this call's post-lock stamp. Null clears the column and still stamps updated_at. */
+async function stampTask(id: string, column: "completed_at" | "deleted_at", value: "clock" | null): Promise<SaveResult<Task>> {
   try {
-    const affected = await run(
-      `UPDATE tasks SET ${column} = $1, updated_at = $2 WHERE id = $3 AND deleted_at IS NULL`,
-      [value, stamp, id],
-    );
+    const { batches } = await writeStamped((stamp) => [
+      {
+        sql: `UPDATE tasks SET ${column} = $1, updated_at = $2 WHERE id = $3 AND deleted_at IS NULL`,
+        values: [value === "clock" ? stamp : null, stamp, id],
+      },
+    ]);
     const current = await getTask(id);
-    if (affected === 0 || !current) return { status: "conflict", current };
+    if ((batches[0]?.rowsAffected ?? 0) === 0 || !current) return { status: "conflict", current };
     return { status: "saved", row: current };
-  } catch (err) {
+  } catch {
     await logFailure("task save failed");
     return { status: "error", message: "Not saved" };
   }
@@ -265,9 +298,9 @@ async function stampTask(id: string, column: "completed_at" | "deleted_at", valu
 export async function completeTask(id: string): Promise<SaveResult<Task>> {
   const current = await getTask(id);
   if (!current || current.deletedAt || current.completedAt) {
-    return stampTask(id, "completed_at", nowIso());
+    return stampTask(id, "completed_at", "clock");
   }
-  const completed = await stampTask(id, "completed_at", nowIso());
+  const completed = await stampTask(id, "completed_at", "clock");
   if (completed.status !== "saved") return completed;
   await recordHistory(id, "Completed");
   const spawned = await spawnNextOccurrence(current);
@@ -279,24 +312,56 @@ export async function completeTask(id: string): Promise<SaveResult<Task>> {
 }
 
 async function spawnNextOccurrence(current: Task): Promise<"none" | "saved" | "error"> {
-  const parsed = current.recurrenceJson ? parseRule(current.recurrenceJson) : null;
-  if (!parsed) return "none";
-  const anchor = anchorDate(parsed, current.dueOn, Temporal.Now.plainDateISO().toString());
-  if (!anchor) return "none";
-  const dueOn = nextDueDate(parsed, anchor);
-  const nextRule = dueOn ? ruleAfterComplete(parsed) : null;
-  if (!dueOn || !nextRule) return "none";
-  const id = crypto.randomUUID();
-  const stamp = nowIso();
-  const startOn = current.startOn && current.dueOn ? shiftStart(current.startOn, current.dueOn, dueOn) : null;
+  if (!current.recurrenceJson || !parseRule(current.recurrenceJson)) return "none";
   try {
+    const [tagRows, reminderRows, checklistRows] = await Promise.all([
+      query<{ tag_id: string }>(`SELECT tag_id FROM task_tags WHERE task_id = $1`, [current.id]),
+      query<{ minutes_before: number | string }>(`SELECT minutes_before FROM reminders WHERE task_id = $1`, [current.id]),
+      query<{ line_text: string; due_on: string; due_time: string | null; minutes_before: number | string }>(
+        `SELECT line_text, due_on, due_time, minutes_before FROM checklist_reminders WHERE task_id = $1`,
+        [current.id],
+      ),
+    ]);
+    const draft = nextOccurrenceDraft(
+      {
+        seriesId: current.seriesId,
+        listId: current.listId,
+        sectionId: current.sectionId,
+        parentId: current.parentId,
+        title: current.title,
+        notes: current.notes,
+        priority: current.priority,
+        important: current.important,
+        urgent: current.urgent,
+        pinned: current.pinned,
+        startOn: current.startOn,
+        dueOn: current.dueOn,
+        dueTime: current.dueTime,
+        durationMinutes: current.durationMinutes,
+        estimatedPomos: current.estimatedPomos,
+        recurrenceJson: current.recurrenceJson,
+        tagIds: tagRows.map((row) => row.tag_id),
+        reminderOffsets: reminderRows.map((row) => Number(row.minutes_before)),
+        checklistReminders: checklistRows.map((row) => ({
+          lineText: row.line_text,
+          dueOn: row.due_on,
+          dueTime: row.due_time,
+          minutesBefore: Number(row.minutes_before),
+        })),
+      },
+      Temporal.Now.plainDateISO().toString(),
+    );
+    if (!draft) return "none";
+    const id = crypto.randomUUID();
     const maxRows = await query<{ max_sort: number | null }>(
       "SELECT COALESCE(MAX(sort_order), 0) AS max_sort FROM tasks WHERE list_id = $1",
       [current.listId],
     );
     const sortOrder = Number(maxRows[0]?.max_sort ?? 0) + 1;
-    await run(
-      `INSERT INTO tasks (
+    await writeStamped((stamp) => {
+      const statements: SqlStatement[] = [
+        {
+          sql: `INSERT INTO tasks (
          id, series_id, list_id, section_id, parent_id, title, notes, priority,
          important, urgent, pinned, start_on, due_on, due_time, duration_minutes, recurrence_json, estimated_pomos, completed_pomos,
          sort_order, completed_at, deleted_at, created_at, updated_at
@@ -305,57 +370,52 @@ async function spawnNextOccurrence(current: Task): Promise<"none" | "saved" | "e
          $9, $10, $11, $12, $13, $14, $15, $16, $19, 0,
          $17, NULL, NULL, $18, $18
        )`,
-      [
-        id,
-        current.seriesId,
-        current.listId,
-        current.sectionId,
-        current.parentId,
-        current.title,
-        current.notes,
-        current.priority,
-        current.important ? 1 : 0,
-        current.urgent ? 1 : 0,
-        current.pinned ? 1 : 0,
-        startOn,
-        dueOn,
-        current.dueTime,
-        current.durationMinutes,
-        serializeRule(nextRule),
-        sortOrder,
-        stamp,
-        current.estimatedPomos,
-      ],
-    );
-    await run(
-      `INSERT INTO task_tags (task_id, tag_id)
-       SELECT $1, tag_id FROM task_tags WHERE task_id = $2`,
-      [id, current.id],
-    );
-    const reminders = await query<{ minutes_before: number }>(
-      `SELECT minutes_before FROM reminders WHERE task_id = $1`,
-      [current.id],
-    );
-    for (const reminder of reminders) {
-      await run(
-        `INSERT INTO reminders (id, task_id, minutes_before, fired_at, created_at) VALUES ($1, $2, $3, NULL, $4)`,
-        [crypto.randomUUID(), id, reminder.minutes_before, stamp],
-      );
-    }
-    await copyChecklistReminders(current.id, id, stamp);
+          values: [
+            id,
+            draft.seriesId,
+            draft.listId,
+            draft.sectionId,
+            draft.parentId,
+            draft.title,
+            draft.notes,
+            draft.priority,
+            draft.important ? 1 : 0,
+            draft.urgent ? 1 : 0,
+            draft.pinned ? 1 : 0,
+            draft.startOn,
+            draft.dueOn,
+            draft.dueTime,
+            draft.durationMinutes,
+            draft.recurrenceJson,
+            sortOrder,
+            stamp,
+            draft.estimatedPomos,
+          ],
+        },
+      ];
+      for (const tagId of draft.tagIds) {
+        statements.push({ sql: `INSERT INTO task_tags (task_id, tag_id) VALUES ($1, $2)`, values: [id, tagId] });
+      }
+      for (const minutes of draft.reminderOffsets) {
+        statements.push({
+          sql: `INSERT INTO reminders (id, task_id, minutes_before, fired_at, created_at, updated_at) VALUES ($1, $2, $3, NULL, $4, $4)`,
+          values: [crypto.randomUUID(), id, minutes, stamp],
+        });
+      }
+      for (const row of draft.checklistReminders) {
+        statements.push({
+          sql: `INSERT INTO checklist_reminders (
+           id, task_id, line_text, due_on, due_time, minutes_before, fired_at, created_at, updated_at
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)`,
+          values: [crypto.randomUUID(), id, row.lineText, row.dueOn, row.dueTime, row.minutesBefore, row.firedAt, stamp],
+        });
+      }
+      return statements;
+    });
     return "saved";
-  } catch (err) {
-    await run("DELETE FROM tasks WHERE id = $1", [id]).catch(() => undefined);
+  } catch {
     return "error";
   }
-}
-
-function shiftStart(startOn: string, dueOn: string, nextDue: string): string {
-  const start = Temporal.PlainDate.from(startOn);
-  const due = Temporal.PlainDate.from(dueOn);
-  const next = Temporal.PlainDate.from(nextDue);
-  const days = start.until(due, { largestUnit: "days" }).days;
-  return addDays(next.toString(), -days);
 }
 
 export async function tasksUpcoming(today: string): Promise<Task[]> {
@@ -390,19 +450,30 @@ export async function reopenTask(id: string): Promise<SaveResult<Task>> {
 
 export async function trashTask(id: string): Promise<SaveResult<Task>> {
   const current = await getTask(id);
-  if (current) {
-    try {
-      await run(
-        `UPDATE tasks SET parent_id = NULL, list_id = $1, section_id = $2, updated_at = $3
+  try {
+    const { batches } = await writeStamped((stamp) => {
+      const statements: SqlStatement[] = [];
+      if (current) {
+        statements.push({
+          sql: `UPDATE tasks SET parent_id = NULL, list_id = $1, section_id = $2, updated_at = $3
          WHERE parent_id = $4 AND deleted_at IS NULL`,
-        [current.listId, current.sectionId, nowIso(), id],
-      );
-    } catch {
-      await logFailure("task save failed");
-      return { status: "error", message: "Not saved" };
-    }
+          values: [current.listId, current.sectionId, stamp, id],
+        });
+      }
+      statements.push({
+        sql: `UPDATE tasks SET deleted_at = $1, updated_at = $1 WHERE id = $2 AND deleted_at IS NULL`,
+        values: [stamp, id],
+      });
+      return statements;
+    });
+    const affected = batches[batches.length - 1]?.rowsAffected ?? 0;
+    const row = await getTask(id);
+    if (affected === 0 || !row) return { status: "conflict", current: row };
+    return { status: "saved", row };
+  } catch {
+    await logFailure("task save failed");
+    return { status: "error", message: "Not saved" };
   }
-  return stampTask(id, "deleted_at", nowIso());
 }
 
 export async function childCount(id: string): Promise<number> {
@@ -448,9 +519,52 @@ export async function tasksForParent(parentId: string): Promise<Task[]> {
   return rows.map(parseTask);
 }
 
+/** One updated_at for the whole call, so a later sync can see the new order. */
 export async function rewriteOrder(ids: string[]): Promise<void> {
-  for (let index = 0; index < ids.length; index += 1) {
-    await run(`UPDATE tasks SET sort_order = $1 WHERE id = $2 AND deleted_at IS NULL`, [index, ids[index]]);
+  if (ids.length === 0) return;
+  await writeStamped((stamp) =>
+    ids.map((id, index) => ({
+      sql: `UPDATE tasks SET sort_order = $1, updated_at = $2 WHERE id = $3 AND deleted_at IS NULL`,
+      values: [index, stamp, id],
+    })),
+  );
+}
+
+/** Section change and destination order in one transaction. Does not complete or reopen. */
+export async function moveTaskOnBoard(
+  taskId: string,
+  sectionId: string,
+  orderedIds: string[] | null,
+): Promise<SaveResult<{ id: string }>> {
+  try {
+    await withStamp(async (stamp, run) => {
+      if (!orderedIds) {
+        await run([
+          {
+            sql: `UPDATE tasks SET section_id = $1, updated_at = $2 WHERE id = $3 AND deleted_at IS NULL`,
+            values: [sectionId, stamp, taskId],
+          },
+        ]);
+        return;
+      }
+      await run(
+        orderedIds.map((id, index) =>
+          id === taskId
+            ? {
+                sql: `UPDATE tasks SET section_id = $1, sort_order = $2, updated_at = $3 WHERE id = $4 AND deleted_at IS NULL`,
+                values: [sectionId, index, stamp, id],
+              }
+            : {
+                sql: `UPDATE tasks SET sort_order = $1, updated_at = $2 WHERE id = $3 AND deleted_at IS NULL`,
+                values: [index, stamp, id],
+              },
+        ),
+      );
+    });
+    return { status: "saved", row: { id: taskId } };
+  } catch {
+    await logFailure("task save failed");
+    return { status: "error", message: "Not saved" };
   }
 }
 
@@ -489,14 +603,15 @@ export async function trashedTasks(): Promise<Task[]> {
 }
 
 export async function restoreTask(id: string): Promise<SaveResult<Task>> {
-  const stamp = nowIso();
   try {
-    const affected = await run(
-      `UPDATE tasks SET deleted_at = NULL, updated_at = $1 WHERE id = $2 AND deleted_at IS NOT NULL`,
-      [stamp, id],
-    );
+    const { batches } = await writeStamped((stamp) => [
+      {
+        sql: `UPDATE tasks SET deleted_at = NULL, updated_at = $1 WHERE id = $2 AND deleted_at IS NOT NULL`,
+        values: [stamp, id],
+      },
+    ]);
     const current = await getTask(id);
-    if (affected === 0 || !current) return { status: "conflict", current };
+    if ((batches[0]?.rowsAffected ?? 0) === 0 || !current) return { status: "conflict", current };
     return { status: "saved", row: current };
   } catch {
     await logFailure("task save failed");
@@ -506,9 +621,13 @@ export async function restoreTask(id: string): Promise<SaveResult<Task>> {
 
 export async function purgeTask(id: string): Promise<SaveResult<{ id: string }>> {
   try {
+    const rows = await query<{ id: string }>(`SELECT id FROM tasks WHERE id = $1 AND deleted_at IS NOT NULL`, [id]);
+    if (rows.length === 0) return { status: "error", message: "Not saved" };
     const files = await attachmentIdsForTasks([id]);
-    const affected = await run(`DELETE FROM tasks WHERE id = $1 AND deleted_at IS NOT NULL`, [id]);
-    if (affected === 0) return { status: "error", message: "Not saved" };
+    await writeStamped((stamp) => [
+      deletionStatement("tasks", id, stamp),
+      { sql: `DELETE FROM tasks WHERE id = $1 AND deleted_at IS NOT NULL`, values: [id] },
+    ]);
     await dropStoredFiles(files);
     return { status: "saved", row: { id } };
   } catch {
@@ -519,8 +638,12 @@ export async function purgeTask(id: string): Promise<SaveResult<{ id: string }>>
 
 export async function emptyTrash(): Promise<SaveResult<{ id: string }>> {
   try {
+    const ids = await query<{ id: string }>(`SELECT id FROM tasks WHERE deleted_at IS NOT NULL`);
     const files = await trashedAttachmentIds();
-    await run(`DELETE FROM tasks WHERE deleted_at IS NOT NULL`);
+    await writeStamped((stamp) => [
+      ...ids.map((row) => deletionStatement("tasks", row.id, stamp)),
+      { sql: `DELETE FROM tasks WHERE deleted_at IS NOT NULL` },
+    ]);
     await dropStoredFiles(files);
     return { status: "saved", row: { id: "trash" } };
   } catch {

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-phone-reply"
+description = "Enables the phone_reply command without any pre-configured scope."
+commands.allow = ["phone_reply"]
+
+[[permission]]
+identifier = "deny-phone-reply"
+description = "Denies the phone_reply command without any pre-configured scope."
+commands.deny = ["phone_reply"]

@@ -17,6 +17,13 @@ fn main() {
                 "show_log_folder",
                 "set_tray_timer",
                 "ensure_on_screen",
+                "sql_transaction",
+                "phone_set_enabled",
+                "phone_status",
+                "phone_pairing_offer",
+                "phone_forget",
+                "phone_kick",
+                "phone_reply",
             ])),
     )
     .expect("failed to run tauri build");
