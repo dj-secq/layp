@@ -10,9 +10,13 @@ import {
   markFiredOn,
   notificationCopy,
   notificationIdentifier,
+  nextReminder,
+  pendingStillMatches,
   planReminders,
   reminderId,
+  presentDue,
   replaceScheduled,
+  splitPastReminders,
   type DueReminder,
   type NotificationPort,
   type PlannedReminder,
@@ -97,8 +101,9 @@ it("cancels layp notifications and schedules the task title after permission is 
     schedule: async (notice) => {
       log.push(`schedule:${notice.identifier}:${notice.title}:${notice.body}`);
     },
+    present: async () => undefined,
   };
-  expect(await replaceScheduled(port, items)).toBe("ok");
+  expect(await replaceScheduled(port, items)).toEqual({ status: "ok", shown: [] });
   expect(log).toEqual([
     "allow",
     "cancel:layp:old",
@@ -127,8 +132,9 @@ it("a permission denial schedules nothing and is separate from the 64 cap", asyn
     schedule: async () => {
       log.push("schedule");
     },
+    present: async () => undefined,
   };
-  expect(await replaceScheduled(denied, items)).toBe("denied");
+  expect(await replaceScheduled(denied, items)).toEqual({ status: "denied", shown: [] });
   expect(log).toEqual([]);
 
   const empty: NotificationPort = {
@@ -143,8 +149,9 @@ it("a permission denial schedules nothing and is separate from the 64 cap", asyn
     schedule: async () => {
       log.push("schedule");
     },
+    present: async () => undefined,
   };
-  expect(await replaceScheduled(empty, [])).toBe("ok");
+  expect(await replaceScheduled(empty, [])).toEqual({ status: "ok", shown: [] });
   expect(log).toEqual(["cancel:layp:stale"]);
 });
 
@@ -158,13 +165,110 @@ it("keeps going when one schedule rejects", async () => {
       if (notice.identifier.endsWith("bad")) throw new Error("rejected");
       scheduled.push(notice.body);
     },
+    present: async () => undefined,
   };
   const items: PlannedReminder[] = [
     { id: "bad", taskTitle: "Hidden", lineText: null, fireAt: new Date(Date.now() + 60_000).toISOString() },
     { id: "ok", taskTitle: "Visible", lineText: null, fireAt: new Date(Date.now() + 120_000).toISOString() },
   ];
-  expect(await replaceScheduled(port, items)).toBe("ok");
+  expect(await replaceScheduled(port, items)).toEqual({ status: "ok", shown: [] });
   expect(scheduled).toEqual(["Visible"]);
+});
+
+it("shows a reminder that is already due and skips one the phone rejected", async () => {
+  const shown: string[] = [];
+  const port: NotificationPort = {
+    allow: async () => true,
+    pending: async () => [],
+    cancel: async () => undefined,
+    schedule: async () => undefined,
+    present: async (notice) => {
+      if (notice.identifier.endsWith("bad")) throw new Error("rejected");
+      shown.push(notice.body);
+    },
+  };
+  const ids = await presentDue(port, [
+    { id: "bad", taskTitle: "Hidden", lineText: null, fireAt: now },
+    { id: "gym", taskTitle: "Gym", lineText: null, fireAt: now },
+  ]);
+  expect(ids).toEqual(["gym"]);
+  expect(shown).toEqual(["Gym"]);
+});
+
+it("schedules an Android reminder on the clock", async () => {
+  let delivery: string | undefined;
+  const port: NotificationPort = {
+    allow: async () => true,
+    pending: async () => [],
+    cancel: async () => undefined,
+    schedule: async (notice) => {
+      delivery = notice.delivery;
+    },
+    present: async () => undefined,
+  };
+  await replaceScheduled(
+    port,
+    [{ id: "gym", taskTitle: "Gym", lineText: null, fireAt: new Date(Date.now() + 60_000).toISOString() }],
+    "reminders",
+  );
+  expect(delivery).toBe("alarmClock");
+});
+
+it("leaves a clock alarm that is already set for the same instant", async () => {
+  const log: string[] = [];
+  const fireAt = new Date(Date.now() + 60_000).toISOString();
+  const port: NotificationPort = {
+    allow: async () => true,
+    pending: async () => [{ identifier: notificationIdentifier("gym"), fireAtMs: Date.parse(fireAt), delivery: "alarmClock" }],
+    cancel: async (identifier) => {
+      log.push(`cancel:${identifier}`);
+    },
+    schedule: async (notice) => {
+      log.push(`schedule:${notice.identifier}`);
+    },
+    present: async () => {
+      log.push("present");
+    },
+  };
+  const result = await replaceScheduled(port, [{ id: "gym", taskTitle: "Gym", lineText: null, fireAt }], "reminders");
+  expect(result).toEqual({ status: "ok", shown: [] });
+  expect(log).toEqual([]);
+  expect(pendingStillMatches({ identifier: "layp:gym", fireAtMs: Date.parse(fireAt), delivery: "bestEffort" }, Date.parse(fireAt), true)).toBe(false);
+});
+
+it("shows a reminder that becomes due while the queue is replaced", async () => {
+  const shown: string[] = [];
+  const port: NotificationPort = {
+    allow: async () => true,
+    pending: async () => [],
+    cancel: async () => undefined,
+    schedule: async () => undefined,
+    present: async (notice) => {
+      shown.push(notice.body);
+    },
+  };
+  const result = await replaceScheduled(port, [{ id: "gym", taskTitle: "Gym", lineText: null, fireAt: new Date(Date.now() - 1000).toISOString() }]);
+  expect(result).toEqual({ status: "ok", shown: ["gym"] });
+  expect(shown).toEqual(["Gym"]);
+});
+
+it("shows a recent missed reminder and keeps one already in the tray", () => {
+  const rows: DueReminder[] = [
+    { id: "new", taskTitle: "Gym", lineText: null, dueOn: "2026-10-08", dueTime: "11:50", minutesBefore: 0 },
+    { id: "seen", taskTitle: "Seen", lineText: null, dueOn: "2026-10-08", dueTime: "11:40", minutesBefore: 0 },
+    { id: "old", taskTitle: "Old", lineText: null, dueOn: "2026-10-07", dueTime: "11:00", minutesBefore: 0 },
+  ];
+  const split = splitPastReminders(rows, ["new", "seen", "old"], new Set([notificationIdentifier("seen")]), now, "UTC");
+  expect(split.show.map((item) => item.id)).toEqual(["new"]);
+  expect(split.quiet).toEqual(["seen", "old"]);
+});
+
+it("waits for the soonest reminder that fits in a timer", () => {
+  const soon = { id: "soon", taskTitle: "Soon", lineText: null, fireAt: new Date(5_000).toISOString() };
+  const later = { id: "later", taskTitle: "Later", lineText: null, fireAt: new Date(9_000).toISOString() };
+  const tooFar = { id: "far", taskTitle: "Far", lineText: null, fireAt: new Date(4_000_000_000_000).toISOString() };
+  expect(nextReminder([later, tooFar, soon], 1_000)?.id).toBe("soon");
+  expect(nextReminder([tooFar], 1_000)).toBeNull();
 });
 
 it("reads the reminder id back from its notification identifier", () => {

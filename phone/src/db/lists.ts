@@ -1,4 +1,5 @@
 import { cleanListName, listSchema, sectionSchema, type Section, type TaskList } from "@layp/shared";
+import { randomUUID } from "../link/random";
 import { compareSections, sectionDeletePlan } from "./board";
 import { withLock, withStamp } from "./lock";
 import type { Run } from "./sql";
@@ -41,7 +42,7 @@ export async function createSection(listId: string, nameInput: string): Promise<
   const cleaned = cleanListName(nameInput);
   if ("error" in cleaned) return { status: "error", message: cleaned.error };
   try {
-    return await withStamp((stamp, run) => createSectionOn(run, listId, cleaned.name, stamp, crypto.randomUUID()));
+    return await withStamp((stamp, run) => createSectionOn(run, listId, cleaned.name, stamp, randomUUID()));
   } catch {
     return { status: "error", message: "Not saved" };
   }
@@ -59,7 +60,7 @@ export async function renameSection(section: Section, nameInput: string): Promis
 
 export async function deleteSection(sectionId: string, listId: string): Promise<SectionResult<{ id: string }>> {
   try {
-    return await withStamp((stamp, run) => deleteSectionOn(run, sectionId, listId, stamp, () => crypto.randomUUID()));
+    return await withStamp((stamp, run) => deleteSectionOn(run, sectionId, listId, stamp, () => randomUUID()));
   } catch {
     return { status: "error", message: "Not saved" };
   }

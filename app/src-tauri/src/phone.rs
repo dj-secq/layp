@@ -499,24 +499,26 @@ async fn serve(mut stream: TcpStream, app: AppHandle, dir: PathBuf, shared: std:
 
 async fn acquire_slot(shared: &Shared) -> SlotGuard<'_> {
     loop {
-        let notified = shared.wake.notified();
-        tokio::pin!(notified);
-        notified.as_mut().enable();
-        let generation = {
+        {
             let mut inner = shared.lock();
             if !inner.gate.held {
                 inner.gate.held = true;
                 inner.gate.kick = false;
-                Some(inner.slot_generation)
-            } else {
-                inner.gate.kick = true;
-                None
+                let generation = inner.slot_generation;
+                return SlotGuard { shared, generation };
             }
-        };
-        if let Some(generation) = generation {
-            return SlotGuard { shared, generation };
+            inner.gate.kick = true;
         }
+        // Wake the holder, which may be parked in `hold_for_changes`. This
+        // waiter is not registered yet. Notifying after it is registered
+        // satisfies its own wait and the loop spins while the slot is held.
         shared.wake.notify_waiters();
+        let notified = shared.wake.notified();
+        tokio::pin!(notified);
+        notified.as_mut().enable();
+        if !shared.lock().gate.held {
+            continue;
+        }
         notified.await;
     }
 }
@@ -1165,6 +1167,39 @@ eth0 0001A8C0 00000000 0001 0 0 0 00FFFFFF 0 0 0
         let result = read_http(&mut server).await;
         let _ = write.await;
         result
+    }
+
+    fn test_shared() -> super::Shared {
+        super::Shared {
+            inner: std::sync::Mutex::new(super::Inner {
+                run: None,
+                offer: None,
+                replies: std::collections::HashMap::new(),
+                gate: super::Gate { held: false, kick: false },
+                next_id: 0,
+                generation: 0,
+                slot_generation: 0,
+                starting: false,
+            }),
+            wake: tokio::sync::Notify::new(),
+        }
+    }
+
+    #[tokio::test]
+    async fn a_second_sync_waits_for_the_slot_instead_of_spinning() {
+        let shared = std::sync::Arc::new(test_shared());
+        let held = super::acquire_slot(&shared).await;
+        let waiting = std::sync::Arc::clone(&shared);
+        let waiter = tokio::spawn(async move {
+            let _next = super::acquire_slot(&waiting).await;
+        });
+        tokio::time::sleep(std::time::Duration::from_millis(80)).await;
+        assert!(!waiter.is_finished(), "the waiting sync took the slot while it was held");
+        drop(held);
+        tokio::time::timeout(std::time::Duration::from_secs(1), waiter)
+            .await
+            .expect("the waiting sync was not woken when the slot was released")
+            .expect("waiting sync task");
     }
 
     #[tokio::test]

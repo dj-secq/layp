@@ -1,4 +1,5 @@
 import { chacha20poly1305 } from "@noble/ciphers/chacha.js";
+import { randomBytes } from "./random";
 
 const AAD = new TextEncoder().encode("layp-sync-v1");
 
@@ -50,7 +51,7 @@ export function decodeKey(text: string): Uint8Array | null {
 
 export function sealJson(key: Uint8Array, value: unknown): string {
   const plain = new TextEncoder().encode(JSON.stringify(value));
-  const nonce = crypto.getRandomValues(new Uint8Array(12));
+  const nonce = randomBytes(12);
   const cipher = chacha20poly1305(key, nonce, AAD).encrypt(plain);
   return JSON.stringify({ v: 1, n: bytesToBase64(nonce), c: bytesToBase64(cipher) });
 }

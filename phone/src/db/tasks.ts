@@ -15,6 +15,7 @@ import {
   type Task,
   type TaskList,
 } from "@layp/shared";
+import { randomUUID } from "../link/random";
 import type { BoardDrop } from "./board";
 import { completeOn } from "./complete";
 import { withLock, withStamp } from "./lock";
@@ -82,7 +83,7 @@ export function tasksForDate(date: string, today: string): Promise<TodayTask[]> 
 
 export async function completeTask(id: string): Promise<"saved" | "none" | "error"> {
   try {
-    return await withStamp((stamp, run) => completeOn(run, id, stamp, todayIso(), () => crypto.randomUUID()));
+    return await withStamp((stamp, run) => completeOn(run, id, stamp, todayIso(), () => randomUUID()));
   } catch {
     return "error";
   }
@@ -108,7 +109,7 @@ export async function createTask(input: NewTask): Promise<SaveResult<Task>> {
   const prepared = prepareNewTask(input);
   if ("error" in prepared) return { status: "error", message: prepared.error };
   try {
-    return await withStamp((stamp, run) => createOn(run, prepared.input, stamp, crypto.randomUUID()));
+    return await withStamp((stamp, run) => createOn(run, prepared.input, stamp, randomUUID()));
   } catch {
     return { status: "error", message: "Not saved" };
   }
@@ -134,7 +135,7 @@ export async function addInboxTitle(title: string): Promise<SaveResult<Task>> {
           important: false,
         },
         stamp,
-        crypto.randomUUID(),
+        randomUUID(),
       );
     });
   } catch {
@@ -144,7 +145,7 @@ export async function addInboxTitle(title: string): Promise<SaveResult<Task>> {
 
 export async function addQuick(text: string, now: { today: string; minutes: number | null }): Promise<QuickSave> {
   try {
-    return await withStamp(async (stamp, run) => addQuickOn(run, text, now, stamp, () => crypto.randomUUID()));
+    return await withStamp(async (stamp, run) => addQuickOn(run, text, now, stamp, () => randomUUID()));
   } catch {
     return { status: "error", message: "Not saved" };
   }
@@ -154,7 +155,7 @@ export async function patchTask(task: Task, patch: TaskPatch, force = false): Pr
   const prepared = preparePatch(task, patch);
   if ("error" in prepared) return { status: "error", message: prepared.error };
   try {
-    return await withStamp((stamp, run) => patchOn(run, task, prepared.patch, stamp, force, () => crypto.randomUUID()));
+    return await withStamp((stamp, run) => patchOn(run, task, prepared.patch, stamp, force, () => randomUUID()));
   } catch {
     return { status: "error", message: "Not saved" };
   }
@@ -283,7 +284,7 @@ export async function patchOn(
   patch: TaskPatch,
   stamp: string,
   force = false,
-  newId: () => string = () => crypto.randomUUID(),
+  newId: () => string = () => randomUUID(),
 ): Promise<SaveResult<Task>> {
   const prepared = preparePatch(task, patch);
   if ("error" in prepared) return { status: "error", message: prepared.error };
@@ -573,7 +574,7 @@ export async function applyBoardDrop(
 ): Promise<{ status: "saved" } | { status: "none" } | { status: "error"; message: string }> {
   if (plan.kind === "none") return { status: "none" };
   try {
-    const result = await withStamp((stamp, run) => applyBoardDropOn(run, task, plan, stamp, todayIso(), () => crypto.randomUUID()));
+    const result = await withStamp((stamp, run) => applyBoardDropOn(run, task, plan, stamp, todayIso(), () => randomUUID()));
     if (result === "saved") return { status: "saved" };
     if (result === "none") return { status: "none" };
     return { status: "error", message: "Not saved" };
