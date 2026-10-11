@@ -40,6 +40,17 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      "./plugins/with-cleartext",
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "./assets/fonts/SpaceGrotesk_500Medium.ttf",
+            "./assets/fonts/SpaceGrotesk_700Bold.ttf",
+            "./assets/fonts/ArchivoBlack_400Regular.ttf"
+          ]
+        }
+      ],
       "expo-router",
       [
         "expo-splash-screen",

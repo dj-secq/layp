@@ -1,13 +1,11 @@
-import { ArchivoBlack_400Regular } from "@expo-google-fonts/archivo-black";
-import { SpaceGrotesk_500Medium, SpaceGrotesk_700Bold } from "@expo-google-fonts/space-grotesk";
 import { useFonts } from "expo-font";
 
-/** Desktop body: Space Grotesk 500, registered as “Layp Grotesk”. */
-export const bodyFamily = "LaypGrotesk";
+/** Desktop body: Space Grotesk 500. The name matches the file Android loads. */
+export const bodyFamily = "SpaceGrotesk_500Medium";
 /** Desktop titles: Space Grotesk 700. A separate file so Android does not faux-bold the medium cut. */
-export const boldFamily = "LaypGroteskBold";
+export const boldFamily = "SpaceGrotesk_700Bold";
 /** Desktop focus clock only. */
-export const displayFamily = "LaypDisplay";
+export const displayFamily = "ArchivoBlack_400Regular";
 
 let faces = false;
 
@@ -26,9 +24,9 @@ export function isBoldWeight(weight: Weight): boolean {
 /** Load the desktop faces. Returns true once the app can render, even if the load failed. */
 export function useLaypFonts(): boolean {
   const [loaded, error] = useFonts({
-    [bodyFamily]: SpaceGrotesk_500Medium,
-    [boldFamily]: SpaceGrotesk_700Bold,
-    [displayFamily]: ArchivoBlack_400Regular,
+    [bodyFamily]: require("../../assets/fonts/SpaceGrotesk_500Medium.ttf"),
+    [boldFamily]: require("../../assets/fonts/SpaceGrotesk_700Bold.ttf"),
+    [displayFamily]: require("../../assets/fonts/ArchivoBlack_400Regular.ttf"),
   });
   if (loaded) faces = true;
   return loaded || error != null;
