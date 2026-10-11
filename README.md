@@ -48,11 +48,11 @@ Type a task in the sidebar field. `call mom tomorrow 9am` sets the title, the da
 
 ## Install
 
-The `.deb` for Debian, Ubuntu, and Linux Mint is attached to the [0.1.0 release](https://github.com/dj-secq/layp/releases/tag/v0.1.0).
+The desktop package and the phone APK are attached to the [0.2.0 release](https://github.com/dj-secq/layp/releases/tag/v0.2.0).
 
 ```sh
-curl -LO https://github.com/dj-secq/layp/releases/download/v0.1.0/Layp_0.1.0_amd64.deb
-sudo apt install ./Layp_0.1.0_amd64.deb
+curl -LO https://github.com/dj-secq/layp/releases/download/v0.2.0/Layp_0.2.0_amd64.deb
+sudo apt install ./Layp_0.2.0_amd64.deb
 ```
 
 Installing it adds Layp to the app menu. The package is section `utils`, priority `optional`. The desktop entry is a Productivity app. Its keywords are tasks, planner, calendar, journal, todo, and focus.
@@ -82,7 +82,9 @@ npm run tauri dev
 
 ## Phone
 
-The phone app is in `phone/`. It is an Expo development build for a phone on the same Wi-Fi, not a store download.
+The phone APK on the 0.2.0 release is an arm64 Android package. Install it from the file manager. It is signed with its own key, so a development build of Layp has to be uninstalled first.
+
+The phone project is in `phone/`. `npx expo start` is the development build, for a phone on the same Wi-Fi. It is not a store download.
 
 ```sh
 cd phone
