@@ -22,9 +22,10 @@ import {
   type TaskList,
   type WeekStart,
 } from "@layp/shared";
-import { Redirect, Stack } from "expo-router";
+import { Redirect } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
+import { LaypTitle } from "@/components/layp-title";
 
 type Mode = "month" | "week" | "day" | "agenda";
 
@@ -92,7 +93,7 @@ export function CalendarScreen() {
 
   return (
     <ScreenScroll>
-      <Stack.Title>Calendar</Stack.Title>
+      <LaypTitle>Calendar</LaypTitle>
       <HeaderAdd day={anchor} />
       <DateStepper
         label={range.label}

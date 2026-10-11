@@ -16,9 +16,10 @@ import {
   type Task,
   type TimerSnapshot,
 } from "@layp/shared";
-import { Redirect, Stack, useLocalSearchParams } from "expo-router";
+import { Redirect, useLocalSearchParams } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { AppState, Pressable, Text, View } from "react-native";
+import { LaypTitle } from "@/components/layp-title";
 
 const ROUNDS = [1, 2, 3, 4, 5, 6, 7, 8] as const;
 
@@ -189,7 +190,7 @@ export function FocusScreen() {
 
   return (
     <ScreenScroll>
-      <Stack.Title>Focus</Stack.Title>
+      <LaypTitle>Focus</LaypTitle>
       <Text style={{ color: colors.label, fontSize: 72, lineHeight: 80, fontVariant: ["tabular-nums"], fontFamily: displayFamily, fontWeight: "400" }}>
         {formatRemaining(timer.remainingSeconds)}
       </Text>

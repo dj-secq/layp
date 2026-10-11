@@ -5,9 +5,10 @@ import { colors, ink, onPrimary, primary } from "@/theme/colors";
 import { usePaper, usePhoneSettings } from "@/theme/theme";
 import { usePhone } from "@/state/phone";
 import { MOOD_COLORS, averageSleep, leadingHobby, monthCells, monthLabel, shiftMonth, sumMinutes, todayIso, weekdayLabels } from "@layp/shared";
-import { Redirect, Stack, router } from "expo-router";
+import { Redirect, router } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
+import { LaypTitle } from "@/components/layp-title";
 
 export function MonthJournalScreen() {
   usePaper();
@@ -68,7 +69,7 @@ export function MonthJournalScreen() {
 
   return (
     <ScreenScroll>
-      <Stack.Title>Month</Stack.Title>
+      <LaypTitle>Month</LaypTitle>
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
         <TextButton label="Previous" onPress={() => shift(-1)} />
         <Text style={{ color: colors.label, fontSize: 17, fontWeight: "600" }}>{monthLabel(cursor.year, cursor.month)}</Text>

@@ -1,5 +1,5 @@
 import { logFailure, query, writeStamped } from "./client";
-import { parseFocusSound } from "@layp/shared";
+import { parseFocusSound, parseSnippets } from "@layp/shared";
 import { defaultSettings, isThemeName, type Settings } from "./types";
 
 const KEYS = {
@@ -13,6 +13,7 @@ const KEYS = {
   pomoSoundBreak: "pomo_sound_break",
   clock: "clock",
   phoneLink: "phone_link",
+  quickSnippets: "quick_snippets",
 } as const;
 
 export async function loadSettings(): Promise<Settings> {
@@ -35,6 +36,7 @@ export async function loadSettings(): Promise<Settings> {
     pomoSoundBreak: parseFocusSound(values.get(KEYS.pomoSoundBreak)),
     clock: clock === "24" ? "24" : "12",
     phoneLink: values.get(KEYS.phoneLink) === "on",
+    quickSnippets: parseSnippets(values.get(KEYS.quickSnippets)),
   };
 }
 

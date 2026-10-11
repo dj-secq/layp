@@ -82,7 +82,7 @@ export function parseQuickAdd(input: string, lists: QuickList[], now: Now): Quic
   let notice: string | null = null;
   let listId: string | null = null;
   const listMatch = /^(.*)\s+in\s+(.+)$/i.exec(text);
-  if (listMatch) {
+  if (listMatch && !isRelativeSpan(listMatch[2])) {
     const name = listMatch[2].trim();
     const matches = lists.filter((item) => item.name.toLowerCase() === name.toLowerCase());
     if (matches.length === 1) {
@@ -203,6 +203,14 @@ function takeDate(
 ): { dueOn: string; tonight: boolean; rest: string } | null {
   const patterns: Array<{ re: RegExp; build: (match: RegExpExecArray) => { dueOn: string; tonight: boolean } | null }> = [
     {
+      re: /(?:^|\s)in\s+([1-9]\d?)\s+days?(?=\s|$)/i,
+      build: (match) => ({ dueOn: Temporal.PlainDate.from(now.today).add({ days: Number(match[1]) }).toString(), tonight: false }),
+    },
+    {
+      re: /(?:^|\s)in\s+([1-9]\d?)\s+weeks?(?=\s|$)/i,
+      build: (match) => ({ dueOn: Temporal.PlainDate.from(now.today).add({ weeks: Number(match[1]) }).toString(), tonight: false }),
+    },
+    {
       re: /(?:^|\s)tonight(?=\s|$)/i,
       build: () => ({ dueOn: now.today, tonight: true }),
     },
@@ -295,4 +303,10 @@ function civil(year: number, month: number, day: number): string | null {
 
 function pad(value: number): string {
   return String(value).padStart(2, "0");
+}
+
+/** `in 3 days` is a date, not a list name. */
+function isRelativeSpan(name: string): boolean {
+  const text = name.trim();
+  return /^(?:[1-9]\d?)\s+days?$/i.test(text) || /^(?:[1-9]\d?)\s+weeks?$/i.test(text);
 }

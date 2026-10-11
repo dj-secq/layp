@@ -1,4 +1,4 @@
-import { clampPomoMinutes, parseFocusSound, type ClockPreference, type FocusSound, type WeekStart } from "@layp/shared";
+import { clampPomoMinutes, parseFocusSound, parseSnippets, type ClockPreference, type FocusSound, type QuickSnippet, type WeekStart } from "@layp/shared";
 import { isThemeName, type ThemeName } from "../theme/paper";
 import { withLock, withStamp } from "./lock";
 import type { Run } from "./sql";
@@ -11,6 +11,7 @@ export type PhoneSettings = {
   pomoSoundWork: FocusSound;
   pomoSoundBreak: FocusSound;
   clock: ClockPreference;
+  quickSnippets: QuickSnippet[];
 };
 
 const SETTING_KEYS = {
@@ -21,6 +22,7 @@ const SETTING_KEYS = {
   pomoSoundWork: "pomo_sound_work",
   pomoSoundBreak: "pomo_sound_break",
   clock: "clock",
+  quickSnippets: "quick_snippets",
 } as const;
 
 export type SettingKey = keyof typeof SETTING_KEYS;
@@ -44,6 +46,7 @@ export async function readSettings(run: Run): Promise<PhoneSettings> {
     pomoSoundWork: parseFocusSound(values.get(SETTING_KEYS.pomoSoundWork)),
     pomoSoundBreak: parseFocusSound(values.get(SETTING_KEYS.pomoSoundBreak)),
     clock: clock === "24" ? "24" : "12",
+    quickSnippets: parseSnippets(values.get(SETTING_KEYS.quickSnippets)),
   };
 }
 

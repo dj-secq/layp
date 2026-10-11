@@ -7,17 +7,19 @@ import { TextButton } from "@/components/text-button";
 import { exportPhoneDatabase, importPhoneDatabase, pickDatabaseFile } from "@/db/backup";
 import { saveSetting, type SettingKey } from "@/db/settings";
 import { deleteTag, loadTags, removeTagFromTasks, renameTag, tagUseCount } from "@/db/tags";
+import { randomUUID } from "@/link/random";
 import { ArchiveList } from "@/screens/archive-screen";
 import { TrashList } from "@/screens/trash-screen";
 import { usePhone } from "@/state/phone";
 import { colors, ink } from "@/theme/colors";
 import { papers, themeNames, type ThemeName } from "@/theme/paper";
 import { usePaper, usePhoneSettings } from "@/theme/theme";
-import { clampPomoMinutes, focusSounds, type FocusSound, type Tag } from "@layp/shared";
+import { clampPomoMinutes, focusSounds, snippetDraftError, snippetsJson, type FocusSound, type QuickSnippet, type Tag } from "@layp/shared";
 import Constants from "expo-constants";
-import { Redirect, Stack } from "expo-router";
+import { Redirect } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
+import { LaypTitle } from "@/components/layp-title";
 
 export function SettingsScreen() {
   usePaper();
@@ -93,7 +95,7 @@ export function SettingsScreen() {
 
   return (
     <ScreenScroll>
-      <Stack.Title>Settings</Stack.Title>
+      <LaypTitle>Settings</LaypTitle>
       {error ? <Text selectable style={{ color: colors.label }}>{error}</Text> : null}
       {notice ? <Text style={{ color: colors.label }}>{notice}</Text> : null}
 
@@ -122,6 +124,15 @@ export function SettingsScreen() {
           { value: "24", label: "24-hour" },
         ]}
         onChange={(value) => void save("clock", value)}
+      />
+
+      <SnippetSettings
+        snippets={settings.quickSnippets}
+        onSave={async (next) => {
+          await saveSetting("quickSnippets", snippetsJson(next));
+          phone.changed();
+        }}
+        onError={setError}
       />
 
       <Text style={{ color: colors.label, fontSize: 22, fontWeight: "600" }}>Focus</Text>
@@ -300,6 +311,90 @@ function TagRow({ tag, onRename, onDelete }: { tag: Tag; onRename: (name: string
         </View>
       </View>
       <TextButton label="Delete tag" onPress={onDelete} />
+    </View>
+  );
+}
+
+function SnippetSettings({
+  snippets,
+  onSave,
+  onError,
+}: {
+  snippets: QuickSnippet[];
+  onSave: (next: QuickSnippet[]) => Promise<void>;
+  onError: (message: string | null) => void;
+}) {
+  const [name, setName] = useState("");
+  const [line, setLine] = useState("");
+
+  async function add() {
+    const message = snippetDraftError(snippets, name, line);
+    if (message) {
+      onError(message);
+      return;
+    }
+    try {
+      await onSave([...snippets, { id: randomUUID(), name: name.trim(), line: line.trim() }]);
+      setName("");
+      setLine("");
+      onError(null);
+    } catch {
+      onError("Not saved");
+    }
+  }
+
+  async function change(snippet: QuickSnippet, nextName: string, nextLine: string) {
+    const message = snippetDraftError(snippets, nextName, nextLine, snippet.id);
+    if (message) {
+      onError(message);
+      return;
+    }
+    if (nextName.trim() === snippet.name && nextLine.trim() === snippet.line) return;
+    try {
+      await onSave(snippets.map((item) => (item.id === snippet.id ? { ...item, name: nextName.trim(), line: nextLine.trim() } : item)));
+      onError(null);
+    } catch {
+      onError("Not saved");
+    }
+  }
+
+  return (
+    <View style={{ gap: 12 }}>
+      <Text style={{ color: colors.label, fontSize: 22, fontWeight: "600" }}>Quick add</Text>
+      <Text style={{ color: colors.secondaryLabel, fontSize: 14 }}>A short name fills its line. Type the name, or /name, in quick add.</Text>
+      <Field label="Name" value={name} maxLength={24} autoCapitalize="none" onChangeText={setName} />
+      <Field label="Line" value={line} maxLength={200} autoCapitalize="none" onChangeText={setLine} />
+      <TextButton label="Add snippet" onPress={() => void add()} />
+      {snippets.map((snippet) => (
+        <SnippetRow
+          key={snippet.id}
+          snippet={snippet}
+          onChange={change}
+          onDelete={() => void onSave(snippets.filter((item) => item.id !== snippet.id)).catch(() => onError("Not saved"))}
+        />
+      ))}
+    </View>
+  );
+}
+
+function SnippetRow({
+  snippet,
+  onChange,
+  onDelete,
+}: {
+  snippet: QuickSnippet;
+  onChange: (snippet: QuickSnippet, name: string, line: string) => void;
+  onDelete: () => void;
+}) {
+  const [name, setName] = useState(snippet.name);
+  const [line, setLine] = useState(snippet.line);
+  useEffect(() => setName(snippet.name), [snippet.name]);
+  useEffect(() => setLine(snippet.line), [snippet.line]);
+  return (
+    <View style={{ gap: 8 }}>
+      <Field label="Name" value={name} maxLength={24} autoCapitalize="none" onChangeText={setName} onBlur={() => onChange(snippet, name, line)} />
+      <Field label="Line" value={line} maxLength={200} autoCapitalize="none" onChangeText={setLine} onBlur={() => onChange(snippet, name, line)} />
+      <TextButton label="Delete snippet" onPress={onDelete} />
     </View>
   );
 }

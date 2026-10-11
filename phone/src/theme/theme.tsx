@@ -14,6 +14,7 @@ const defaultSettings: PhoneSettings = {
   pomoSoundWork: "bell",
   pomoSoundBreak: "bell",
   clock: "12",
+  quickSnippets: [],
 };
 
 const PaperContext = createContext<{ paper: Paper; settings: PhoneSettings }>({

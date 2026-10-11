@@ -5,9 +5,10 @@ import { usePhone } from "@/state/phone";
 import { colors } from "@/theme/colors";
 import { usePaper } from "@/theme/theme";
 import type { Task } from "@layp/shared";
-import { Redirect, Stack } from "expo-router";
+import { Redirect } from "expo-router";
 import { useEffect, useState } from "react";
 import { Text, View } from "react-native";
+import { LaypTitle } from "@/components/layp-title";
 
 export function TrashScreen() {
   usePaper();
@@ -17,7 +18,7 @@ export function TrashScreen() {
   if (!phone.hasKey) return <Redirect href="/" />;
   return (
     <ScreenScroll>
-      <Stack.Title>Trash</Stack.Title>
+      <LaypTitle>Trash</LaypTitle>
       <TrashList />
     </ScreenScroll>
   );

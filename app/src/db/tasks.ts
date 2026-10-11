@@ -45,6 +45,18 @@ export async function tasksForDate(date: string, today: string): Promise<Task[]>
   return rows.map(parseTask);
 }
 
+/** Newest distinct titles, for quick-add suggestions. */
+export async function recentTaskTitles(): Promise<string[]> {
+  const rows = await query<{ title: string }>(
+    `SELECT title FROM tasks
+     WHERE deleted_at IS NULL AND length(trim(title)) > 0
+     GROUP BY lower(trim(title))
+     ORDER BY MAX(updated_at) DESC
+     LIMIT 8`,
+  );
+  return rows.map((row) => row.title);
+}
+
 export type NewTask = {
   title: string;
   listId: string;

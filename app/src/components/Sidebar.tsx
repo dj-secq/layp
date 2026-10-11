@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import {
   BarChart3,
   Calendar,
@@ -42,9 +43,9 @@ import {
   type Folder,
 } from "../db/lists";
 import { loadTags, type Tag } from "../db/tags";
-import { createTask } from "../db/tasks";
+import { createTask, recentTaskTitles } from "../db/tasks";
 import type { Priority } from "../db/types";
-import { parseQuickAdd } from "@layp/shared";
+import { parseQuickAdd, previewQuickAdd, suggestQuickAdd, type QuickSuggestion } from "@layp/shared";
 import { countdownLabel, emptyRule, movedIds, type FilterRule } from "@layp/shared";
 import { DEFAULT_LIST_COLOR, STICKERS, stickerName } from "@layp/shared";
 import { useApp } from "../state/AppState";
@@ -164,7 +165,13 @@ export function Sidebar({ rail, narrow }: { rail: boolean; narrow: boolean }) {
   const [quick, setQuick] = useState("");
   const [quickError, setQuickError] = useState<string | null>(null);
   const [quickHelp, setQuickHelp] = useState(false);
+  const [recentTitles, setRecentTitles] = useState<string[]>([]);
+  const [quickFocus, setQuickFocus] = useState<"dock" | "drawer" | null>(null);
+  const [suggestOpen, setSuggestOpen] = useState(false);
+  const [suggestActive, setSuggestActive] = useState(0);
   const quickRef = useRef<HTMLFormElement>(null);
+  const quickAnchors = useRef<{ dock: HTMLDivElement | null; drawer: HTMLDivElement | null }>({ dock: null, drawer: null });
+  const [suggestBox, setSuggestBox] = useState<{ top: number; left: number; width: number } | null>(null);
   const [creating, setCreating] = useState(false);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [countdowns, setCountdowns] = useState<Countdown[]>([]);
@@ -188,12 +195,13 @@ export function Sidebar({ rail, narrow }: { rail: boolean; narrow: boolean }) {
 
   useEffect(() => {
     let cancel = false;
-    Promise.all([loadFolders(), loadCountdowns(), loadFilters()])
-      .then(([nextFolders, nextCountdowns, nextFilters]) => {
+    Promise.all([loadFolders(), loadCountdowns(), loadFilters(), recentTaskTitles()])
+      .then(([nextFolders, nextCountdowns, nextFilters, titles]) => {
         if (cancel) return;
         setFolders(nextFolders);
         setCountdowns(nextCountdowns);
         setFilters(nextFilters);
+        setRecentTitles(titles);
       })
       .catch(() => undefined);
     return () => {
@@ -303,6 +311,30 @@ export function Sidebar({ rail, narrow }: { rail: boolean; narrow: boolean }) {
     app.bump();
   }
 
+  useEffect(() => {
+    if (!quickFocus || !suggestOpen) return;
+    function place() {
+      const node = quickFocus ? quickAnchors.current[quickFocus] : null;
+      if (!node) return;
+      const rect = node.getBoundingClientRect();
+      setSuggestBox({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+    }
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [quickFocus, suggestOpen, quick, rail, drawer]);
+
+  function acceptSuggestion(row: QuickSuggestion) {
+    setQuick(row.next);
+    setQuickError(null);
+    setSuggestOpen(true);
+    setSuggestActive(0);
+  }
+
   function leave(run: () => void) {
     run();
     setDrawer(false);
@@ -316,6 +348,17 @@ export function Sidebar({ rail, narrow }: { rail: boolean; narrow: boolean }) {
   function sidebarBody(surface: "dock" | "drawer") {
     const compact = surface === "dock" && rail;
     const quickId = surface === "dock" ? "quick-add" : "quick-add-drawer";
+    const quickNow = Temporal.Now.plainDateTimeISO();
+    const quickClock = { today: quickNow.toPlainDate().toString(), minutes: quickNow.hour * 60 + quickNow.minute };
+    const quickLists = app.lists.map((list) => ({ id: list.id, name: list.name }));
+    const suggestions = suggestQuickAdd(
+      quick,
+      { lists: quickLists, recentTitles, snippets: app.settings.quickSnippets },
+      quickClock,
+    );
+    const preview = previewQuickAdd(quick, quickLists, quickClock, app.settings.clock);
+    const showSuggest = quickFocus === surface && !compact && suggestOpen && suggestions.length > 0;
+    const activeIndex = suggestions.length === 0 ? 0 : suggestActive % suggestions.length;
     const toggleLabel =
       surface === "drawer" ? "Close menu" : compact ? (narrow ? "Open sidebar" : "Expand sidebar") : "Collapse sidebar";
     function onToggle() {
@@ -374,7 +417,12 @@ export function Sidebar({ rail, narrow }: { rail: boolean; narrow: boolean }) {
           void addQuick();
         }}
       >
-        <div className="quick-add">
+        <div
+          className="quick-add"
+          ref={(node) => {
+            quickAnchors.current[surface] = node;
+          }}
+        >
           <label className="sr-only" htmlFor={quickId}>
             Quick add
           </label>
@@ -384,9 +432,42 @@ export function Sidebar({ rail, narrow }: { rail: boolean; narrow: boolean }) {
             placeholder="call mom tomorrow 9am"
             value={quick}
             maxLength={500}
+            role="combobox"
+            aria-autocomplete="list"
+            aria-expanded={showSuggest}
+            aria-controls={showSuggest ? `${quickId}-suggestions` : undefined}
+            aria-activedescendant={showSuggest ? `${quickId}-opt-${activeIndex}` : undefined}
+            onFocus={() => {
+              setQuickFocus(surface);
+              setSuggestOpen(true);
+              setSuggestActive(0);
+            }}
+            onBlur={() => setQuickFocus((current) => (current === surface ? null : current))}
             onChange={(event) => {
               setQuick(event.target.value);
               setQuickError(null);
+              setSuggestOpen(true);
+              setSuggestActive(0);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Escape" && suggestOpen) {
+                event.preventDefault();
+                event.stopPropagation();
+                setSuggestOpen(false);
+                return;
+              }
+              if (!showSuggest) return;
+              if (event.key === "ArrowDown") {
+                event.preventDefault();
+                setSuggestActive((index) => (index + 1) % suggestions.length);
+              } else if (event.key === "ArrowUp") {
+                event.preventDefault();
+                setSuggestActive((index) => (index - 1 + suggestions.length) % suggestions.length);
+              } else if (event.key === "Tab" && !event.shiftKey) {
+                event.preventDefault();
+                const row = suggestions[activeIndex];
+                if (row) acceptSuggestion(row);
+              }
             }}
           />
           <button
@@ -422,6 +503,8 @@ export function Sidebar({ rail, narrow }: { rail: boolean; narrow: boolean }) {
                   <span>friday</span>
                   <span>next friday</span>
                   <span>oct 20</span>
+                  <span>in 3 days</span>
+                  <span>in 2 weeks</span>
                 </dd>
               </div>
               <div>
@@ -455,14 +538,54 @@ export function Sidebar({ rail, narrow }: { rail: boolean; narrow: boolean }) {
                   <span>in School, if that list exists</span>
                 </dd>
               </div>
+              <div>
+                <dt>Saved</dt>
+                <dd className="quick-help-bits">
+                  <span>/gym fills a line from Settings</span>
+                </dd>
+              </div>
             </dl>
           </div>
         </Collapse>
+        {quickFocus === surface && !compact && preview ? (
+          <p className="quick-preview" role="status">
+            {preview}
+          </p>
+        ) : null}
         {quickError ? (
           <p role="status" className="meta mt-1 text-danger">
             {quickError}
           </p>
         ) : null}
+        {showSuggest && suggestBox
+          ? createPortal(
+              <div
+                className="quick-suggest"
+                id={`${quickId}-suggestions`}
+                role="listbox"
+                style={{ top: suggestBox.top, left: suggestBox.left, width: suggestBox.width }}
+              >
+                {suggestions.map((row, index) => (
+                  <button
+                    key={row.id}
+                    id={`${quickId}-opt-${index}`}
+                    type="button"
+                    role="option"
+                    aria-selected={index === activeIndex}
+                    className="quick-suggest-option"
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      acceptSuggestion(row);
+                    }}
+                  >
+                    <span>{row.label}</span>
+                    {row.detail ? <span className="quick-suggest-detail">{row.detail}</span> : null}
+                  </button>
+                ))}
+              </div>,
+              document.body,
+            )
+          : null}
       </form>
         </div>
       </div>

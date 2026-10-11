@@ -10,9 +10,10 @@ import { usePhone, type LinkStatus } from "@/state/phone";
 import { colors, ink } from "@/theme/colors";
 import { usePaper, usePhoneSettings } from "@/theme/theme";
 import { addDays, formatDay, groupTasksForDay, todayIso } from "@layp/shared";
-import { Redirect, Stack, useLocalSearchParams } from "expo-router";
+import { Redirect, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, useColorScheme, View } from "react-native";
+import { LaypTitle } from "@/components/layp-title";
 
 export default function TodayScreen() {
   useColorScheme();
@@ -71,7 +72,7 @@ export default function TodayScreen() {
       contentContainerStyle={{ padding: 20, gap: 16 }}
       style={{ flex: 1, backgroundColor: colors.background }}
     >
-      <Stack.Title>Today</Stack.Title>
+      <LaypTitle>Today</LaypTitle>
       <HeaderSearch />
       <HeaderAdd day={date} />
       <DateStepper

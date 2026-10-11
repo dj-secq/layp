@@ -5,10 +5,11 @@ import { usePhone } from "@/state/phone";
 import { colors, onPrimary, primary } from "@/theme/colors";
 import { usePaper } from "@/theme/theme";
 import { averageSleep, daysAround, formatHours, todayIso, type DayReading } from "@layp/shared";
-import { Redirect, Stack } from "expo-router";
+import { Redirect } from "expo-router";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Pressable, ScrollView, Text, View, type ScrollViewInstance } from "react-native";
 import { axisLabels, buildBoard, chartSeries, columnHead, type Board, type Mark } from "../stats/board";
+import { LaypTitle } from "@/components/layp-title";
 
 const RANGES = [7, 28, 365] as const;
 const VIEWS = ["days", "bars", "line"] as const;
@@ -83,7 +84,7 @@ export function StatsScreen() {
 
   return (
     <ScreenScroll>
-      <Stack.Title>Stats</Stack.Title>
+      <LaypTitle>Stats</LaypTitle>
       <ChipRow label="Range">
         {RANGES.map((range) => (
           <Chip key={range} label={`${range} days`} selected={span === range} onPress={() => setSpan(range)} />

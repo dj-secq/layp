@@ -20,6 +20,7 @@ export const SYNCED_SETTINGS = [
   "pomo_break_minutes",
   "pomo_sound_work",
   "pomo_sound_break",
+  "quick_snippets",
 ] as const;
 
 export function remoteWins(localStamp: string | null, remoteStamp: string, side: Side): boolean {

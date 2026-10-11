@@ -375,6 +375,23 @@ export async function addQuickOn(
   return { status: "saved", notice: plan.notice, row: saved.row };
 }
 
+/** Newest distinct titles, for quick-add suggestions. */
+export function recentTaskTitles(): Promise<string[]> {
+  return withLock(async (run) => {
+    const loaded = await run([
+      {
+        sql: `SELECT title FROM tasks
+              WHERE deleted_at IS NULL AND length(trim(title)) > 0
+              GROUP BY lower(trim(title))
+              ORDER BY MAX(updated_at) DESC
+              LIMIT 8`,
+        values: [],
+      },
+    ]);
+    return (loaded.batches[0]?.rows ?? []).flatMap((row) => (typeof row.title === "string" ? [row.title] : []));
+  });
+}
+
 export async function patchOn(
   run: Run,
   task: Task,

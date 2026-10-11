@@ -5,9 +5,10 @@ import { usePhone } from "@/state/phone";
 import { colors } from "@/theme/colors";
 import { usePaper } from "@/theme/theme";
 import { formatDay } from "@layp/shared";
-import { Stack, router } from "expo-router";
+import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
+import { LaypTitle } from "@/components/layp-title";
 
 export function SearchScreen() {
   usePaper();
@@ -50,7 +51,7 @@ export function SearchScreen() {
 
   return (
     <ScreenScroll search={false}>
-      <Stack.Title>Search</Stack.Title>
+      <LaypTitle>Search</LaypTitle>
       <Field label="Search" value={text} placeholder="Tasks, notes, diary" autoCapitalize="none" autoFocus onChangeText={setText} />
       {error ? <Text selectable style={{ color: colors.label }}>{error}</Text> : null}
       {none ? <Text style={{ color: colors.label, fontSize: 16 }}>No matches.</Text> : null}

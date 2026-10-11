@@ -5,9 +5,10 @@ import { usePhone } from "@/state/phone";
 import { colors, onPrimary, primary } from "@/theme/colors";
 import { usePaper, usePhoneSettings } from "@/theme/theme";
 import { formatShortDay, timelineDays, timelineGroups, timelineRanges, todayIso, type Task, type TaskList, type TimelineRange } from "@layp/shared";
-import { Redirect, Stack, router } from "expo-router";
+import { Redirect, router } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
+import { LaypTitle } from "@/components/layp-title";
 
 const RANGE_LABELS: Record<TimelineRange, string> = {
   "2w": "2 weeks",
@@ -63,7 +64,7 @@ export function TimelineScreen() {
 
   return (
     <ScreenScroll>
-      <Stack.Title>Timeline</Stack.Title>
+      <LaypTitle>Timeline</LaypTitle>
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
         {timelineRanges.map((id) => {
           const selected = range === id;

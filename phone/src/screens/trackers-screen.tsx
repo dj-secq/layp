@@ -22,9 +22,10 @@ import { usePhone } from "@/state/phone";
 import { colors, ink, primary } from "@/theme/colors";
 import { usePaper, usePhoneSettings } from "@/theme/theme";
 import { DEFAULT_LIST_COLOR, STICKERS, monthCells, monthLabel, shiftMonth, streak, todayIso, type Schedule, type TrackerKind } from "@layp/shared";
-import { Redirect, Stack } from "expo-router";
+import { Redirect } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
+import { LaypTitle } from "@/components/layp-title";
 
 const KINDS: { value: TrackerKind; label: string }[] = [
   { value: "check", label: "Check" },
@@ -121,7 +122,7 @@ export function TrackersScreen() {
 
   return (
     <ScreenScroll>
-      <Stack.Title>Trackers</Stack.Title>
+      <LaypTitle>Trackers</LaypTitle>
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
         <TextButton label="Previous" onPress={() => setCursor((current) => shiftMonth(current.year, current.month, -1))} />
         <Text style={{ color: colors.label, fontSize: 17, fontWeight: "600" }}>{monthLabel(cursor.year, cursor.month)}</Text>

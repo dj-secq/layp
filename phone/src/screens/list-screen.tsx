@@ -22,9 +22,10 @@ import { usePhone } from "@/state/phone";
 import { colors } from "@/theme/colors";
 import { usePaper } from "@/theme/theme";
 import { movedIds, sortTasks, todayIso, type Section, type Task, type TaskList, type TaskSort } from "@layp/shared";
-import { Redirect, Stack } from "expo-router";
+import { Redirect } from "expo-router";
 import { useEffect, useState } from "react";
 import { Text, View } from "react-native";
+import { LaypTitle } from "@/components/layp-title";
 
 const sortChoice = new Map<string, TaskSort>();
 
@@ -162,7 +163,7 @@ export function ListScreen({ listId, quickAdd = false }: { listId: string; quick
 
   return (
     <ScreenScroll>
-      <Stack.Title>{list?.name ?? "List"}</Stack.Title>
+      <LaypTitle>{list?.name ?? "List"}</LaypTitle>
       <HeaderAdd listId={listId} />
       {tasks === null ? <Text style={{ color: colors.label }}>Loading the list…</Text> : null}
       {quickAdd ? (

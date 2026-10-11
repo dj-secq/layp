@@ -22,9 +22,10 @@ import { usePhone } from "@/state/phone";
 import { colors, onPrimary, primary } from "@/theme/colors";
 import { usePaper } from "@/theme/theme";
 import { movedIds, type Section, type Task } from "@layp/shared";
-import { Link, Redirect, Stack } from "expo-router";
+import { Link, Redirect } from "expo-router";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Pressable, ScrollView, Text, useColorScheme, View } from "react-native";
+import { LaypTitle } from "@/components/layp-title";
 
 const PRIORITY_WORD = { high: "High", medium: "Medium", low: "Low" } as const;
 let rememberedListId: string | null = null;
@@ -218,7 +219,7 @@ export default function BoardScreen() {
       contentContainerStyle={{ padding: 20, gap: 16 }}
       style={{ flex: 1, backgroundColor: colors.background }}
     >
-      <Stack.Title>Board</Stack.Title>
+      <LaypTitle>Board</LaypTitle>
       <HeaderSearch />
       <HeaderAdd />
       {data === null && !error ? <Text style={{ color: colors.label }}>Loading the board…</Text> : null}

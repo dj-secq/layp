@@ -18,9 +18,10 @@ import { usePhone } from "@/state/phone";
 import { colors, ink } from "@/theme/colors";
 import { usePaper, usePhoneSettings } from "@/theme/theme";
 import { DEFAULT_LIST_COLOR, STICKERS, sumMinutes, todayIso, weekBounds, weekBuckets } from "@layp/shared";
-import { Redirect, Stack, router, useLocalSearchParams } from "expo-router";
+import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
+import { LaypTitle } from "@/components/layp-title";
 
 export function HobbiesScreen() {
   usePaper();
@@ -61,7 +62,7 @@ export function HobbiesScreen() {
 
   return (
     <ScreenScroll>
-      <Stack.Title>Hobbies</Stack.Title>
+      <LaypTitle>Hobbies</LaypTitle>
       {trackers === null ? <Text style={{ color: colors.label }}>Loading hobbies…</Text> : null}
       {trackers !== null && active.length === 0 ? <Text style={{ color: colors.label, fontSize: 17 }}>Add a hobby</Text> : null}
       {active.map((hobby) => (
@@ -195,7 +196,7 @@ export function HobbyDetailScreen() {
 
   return (
     <ScreenScroll>
-      <Stack.Title>{hobby?.name ?? "Hobby"}</Stack.Title>
+      <LaypTitle>{hobby?.name ?? "Hobby"}</LaypTitle>
       {error ? <Text selectable style={{ color: colors.label }}>{error}</Text> : null}
       <Field label="Name" value={name} onChangeText={setName} maxLength={80} />
       <Swatches color={color} onChange={setColor} />

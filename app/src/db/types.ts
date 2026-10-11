@@ -1,4 +1,4 @@
-import type { Day, FocusSound } from "@layp/shared";
+import type { Day, FocusSound, QuickSnippet } from "@layp/shared";
 
 export {
   countdownSchema,
@@ -42,6 +42,7 @@ export type Settings = {
   pomoSoundBreak: FocusSound;
   clock: "12" | "24";
   phoneLink: boolean;
+  quickSnippets: QuickSnippet[];
 };
 
 export const defaultSettings: Settings = {
@@ -55,6 +56,7 @@ export const defaultSettings: Settings = {
   pomoSoundBreak: "bell",
   clock: "12",
   phoneLink: false,
+  quickSnippets: [],
 };
 
 export type SaveResult<T> =

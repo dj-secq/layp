@@ -8,9 +8,10 @@ import { usePhone } from "@/state/phone";
 import { colors } from "@/theme/colors";
 import { usePaper, usePhoneSettings } from "@/theme/theme";
 import { countdownLabel, todayIso } from "@layp/shared";
-import { Redirect, Stack } from "expo-router";
+import { Redirect } from "expo-router";
 import { useEffect, useState } from "react";
 import { Text, View } from "react-native";
+import { LaypTitle } from "@/components/layp-title";
 
 export function CountdownsScreen() {
   usePaper();
@@ -53,7 +54,7 @@ export function CountdownsScreen() {
 
   return (
     <ScreenScroll>
-      <Stack.Title>Countdowns</Stack.Title>
+      <LaypTitle>Countdowns</LaypTitle>
       <TextButton label={editor ? "Close" : "Add countdown"} onPress={() => setEditor(editor ? null : "new")} />
       {editor ? (
         <CountdownForm

@@ -28,9 +28,10 @@ import {
   type Priority,
   type Task,
 } from "@layp/shared";
-import { Redirect, Stack, router, useLocalSearchParams } from "expo-router";
+import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, Switch, Text, useColorScheme, View } from "react-native";
+import { LaypTitle } from "@/components/layp-title";
 
 const PRESETS = [0, 5, 15, 60, 1440];
 
@@ -181,7 +182,7 @@ export default function TaskScreen() {
       contentContainerStyle={{ padding: 20, gap: 16, paddingBottom: 40 }}
       style={{ flex: 1, backgroundColor: colors.background }}
     >
-      <Stack.Title>Task</Stack.Title>
+      <LaypTitle>Task</LaypTitle>
       <HeaderSearch />
       {status ? <Text selectable style={{ color: ink }}>{status}</Text> : null}
       <PrimaryButton

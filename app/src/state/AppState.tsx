@@ -16,7 +16,7 @@ import { loadLists, loadSections } from "../db/lists";
 import { saveSetting } from "../db/settings";
 import { acceptPush, clearPairedPhone, storePairedPhone } from "../db/sync";
 import type { Section, Settings, TaskList } from "../db/types";
-import { addDays, todayIso } from "@layp/shared";
+import { addDays, snippetsJson, todayIso } from "@layp/shared";
 
 export type NotificationPermission = "unknown" | "granted" | "denied";
 
@@ -439,6 +439,7 @@ export function AppProvider({
           if (patch.closeBehavior) await saveSetting("closeBehavior", patch.closeBehavior);
           if (patch.quickAddShortcut !== undefined) await saveSetting("quickAddShortcut", patch.quickAddShortcut);
           if (patch.phoneLink !== undefined) await saveSetting("phoneLink", patch.phoneLink ? "on" : "off");
+          if (patch.quickSnippets !== undefined) await saveSetting("quickSnippets", snippetsJson(patch.quickSnippets));
         } catch (err) {
           setSettings(previous);
           throw err;

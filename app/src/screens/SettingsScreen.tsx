@@ -15,7 +15,7 @@ import { loadArchivedLists, purgeList, restoreList } from "../db/lists";
 import { deleteTag, loadTags, removeTagFromTasks, renameTag, tagUseCount, type Tag } from "../db/tags";
 import { themeNames, type Settings, type TaskList, type ThemeName } from "../db/types";
 import { playChime, unlockChime } from "../lib/chime";
-import { clampPomoMinutes, focusSounds, formatPairingCode, parseFocusSound, parsePairingCode, type FocusSound } from "@layp/shared";
+import { clampPomoMinutes, focusSounds, formatPairingCode, parseFocusSound, parsePairingCode, snippetDraftError, type FocusSound, type QuickSnippet } from "@layp/shared";
 import { useApp } from "../state/AppState";
 
 const themeFaces: Record<ThemeName, { name: string; canvas: string; surface: string; ink: string }> = {
@@ -111,6 +111,8 @@ export function SettingsScreen() {
           </Button>
         </div>
       </section>
+
+      <SnippetSettings />
 
       <section className="settings-group">
         <h2 className="page-title">Desktop</h2>
@@ -685,6 +687,95 @@ function TagList() {
         </Button>
       ) : null}
     </section>
+  );
+}
+
+function SnippetSettings() {
+  const app = useApp();
+  const snippets = app.settings.quickSnippets;
+  const [name, setName] = useState("");
+  const [line, setLine] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  async function save(next: QuickSnippet[]) {
+    await app.updateSettings({ quickSnippets: next });
+  }
+
+  async function add() {
+    const message = snippetDraftError(snippets, name, line);
+    if (message) {
+      setError(message);
+      return;
+    }
+    try {
+      await save([...snippets, { id: crypto.randomUUID(), name: name.trim(), line: line.trim() }]);
+      setName("");
+      setLine("");
+      setError(null);
+    } catch {
+      setError("Not saved");
+    }
+  }
+
+  async function change(snippet: QuickSnippet, nextName: string, nextLine: string) {
+    const message = snippetDraftError(snippets, nextName, nextLine, snippet.id);
+    if (message) {
+      setError(message);
+      return;
+    }
+    if (nextName.trim() === snippet.name && nextLine.trim() === snippet.line) return;
+    try {
+      await save(snippets.map((item) => (item.id === snippet.id ? { ...item, name: nextName.trim(), line: nextLine.trim() } : item)));
+      setError(null);
+    } catch {
+      setError("Not saved");
+    }
+  }
+
+  return (
+    <section className="settings-group">
+      <h2 className="page-title">Quick add</h2>
+      <p className="meta">A short name fills its line. Type the name, or /name, in quick add.</p>
+      {error ? <p className="meta text-danger">{error}</p> : null}
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="grid gap-1">
+          <span className="label">Name</span>
+          <input className="field" value={name} maxLength={24} aria-label="Snippet name" onChange={(event) => setName(event.target.value)} />
+        </label>
+        <label className="grid gap-1">
+          <span className="label">Line</span>
+          <input className="field" value={line} maxLength={200} aria-label="Snippet line" onChange={(event) => setLine(event.target.value)} />
+        </label>
+        <Button onClick={() => void add()}>Add snippet</Button>
+      </div>
+      {snippets.map((snippet) => (
+        <SnippetRow key={snippet.id} snippet={snippet} onChange={change} onDelete={() => void save(snippets.filter((item) => item.id !== snippet.id)).catch(() => setError("Not saved"))} />
+      ))}
+    </section>
+  );
+}
+
+function SnippetRow({
+  snippet,
+  onChange,
+  onDelete,
+}: {
+  snippet: QuickSnippet;
+  onChange: (snippet: QuickSnippet, name: string, line: string) => void;
+  onDelete: () => void;
+}) {
+  const [name, setName] = useState(snippet.name);
+  const [line, setLine] = useState(snippet.line);
+  useEffect(() => setName(snippet.name), [snippet.name]);
+  useEffect(() => setLine(snippet.line), [snippet.line]);
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <input className="field" value={name} maxLength={24} aria-label={`Snippet name ${snippet.name}`} onChange={(event) => setName(event.target.value)} onBlur={() => onChange(snippet, name, line)} />
+      <input className="field" value={line} maxLength={200} aria-label={`Snippet line ${snippet.name}`} onChange={(event) => setLine(event.target.value)} onBlur={() => onChange(snippet, name, line)} />
+      <Button small variant="danger" onClick={onDelete}>
+        Delete snippet
+      </Button>
+    </div>
   );
 }
 

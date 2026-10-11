@@ -13,9 +13,10 @@ import { usePhone } from "@/state/phone";
 import { colors } from "@/theme/colors";
 import { usePaper, usePhoneSettings } from "@/theme/theme";
 import { emptyRule, matchFilter, movedIds, sortTasks, todayIso, type FilterRule, type Priority, type Tag, type Task, type TaskList } from "@layp/shared";
-import { Redirect, Stack, router, useLocalSearchParams } from "expo-router";
+import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
+import { LaypTitle } from "@/components/layp-title";
 
 export function FiltersScreen() {
   usePaper();
@@ -69,7 +70,7 @@ export function FiltersScreen() {
 
   return (
     <ScreenScroll>
-      <Stack.Title>Filters</Stack.Title>
+      <LaypTitle>Filters</LaypTitle>
       <TextButton label={editor ? "Close" : "New filter"} onPress={() => setEditor(editor ? null : "new")} />
       {editor ? (
         <FilterForm
@@ -171,7 +172,7 @@ export function FilterTasksScreen() {
 
   return (
     <ScreenScroll>
-      <Stack.Title>{name}</Stack.Title>
+      <LaypTitle>{name}</LaypTitle>
       {error ? <Text selectable style={{ color: colors.label }}>{error}</Text> : null}
       {tasks === null ? <Text style={{ color: colors.label }}>Loading the filter…</Text> : null}
       {tasks?.length === 0 ? <Text style={{ color: colors.label, fontSize: 16 }}>Nothing matches.</Text> : null}

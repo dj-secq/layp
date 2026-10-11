@@ -5,9 +5,10 @@ import { usePhone } from "@/state/phone";
 import { colors } from "@/theme/colors";
 import { usePaper } from "@/theme/theme";
 import type { TaskList } from "@layp/shared";
-import { Redirect, Stack } from "expo-router";
+import { Redirect } from "expo-router";
 import { useEffect, useState } from "react";
 import { Text, View } from "react-native";
+import { LaypTitle } from "@/components/layp-title";
 
 export function ArchiveScreen() {
   usePaper();
@@ -17,7 +18,7 @@ export function ArchiveScreen() {
   if (!phone.hasKey) return <Redirect href="/" />;
   return (
     <ScreenScroll>
-      <Stack.Title>Archive</Stack.Title>
+      <LaypTitle>Archive</LaypTitle>
       <ArchiveList />
     </ScreenScroll>
   );

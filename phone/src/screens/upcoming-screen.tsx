@@ -6,9 +6,10 @@ import { usePhone } from "@/state/phone";
 import { colors } from "@/theme/colors";
 import { usePaper } from "@/theme/theme";
 import { addDays, formatDay, todayIso, type Task } from "@layp/shared";
-import { Redirect, Stack } from "expo-router";
+import { Redirect } from "expo-router";
 import { useEffect, useState } from "react";
 import { Text, View } from "react-native";
+import { LaypTitle } from "@/components/layp-title";
 
 export function UpcomingScreen() {
   usePaper();
@@ -52,7 +53,7 @@ export function UpcomingScreen() {
 
   return (
     <ScreenScroll>
-      <Stack.Title>Upcoming</Stack.Title>
+      <LaypTitle>Upcoming</LaypTitle>
       <HeaderAdd />
       {tasks === null ? <Text style={{ color: colors.label }}>Loading upcoming…</Text> : null}
       {error && tasks !== null ? <Text selectable style={{ color: colors.label }}>{error}</Text> : null}

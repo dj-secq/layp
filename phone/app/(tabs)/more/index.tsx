@@ -2,8 +2,9 @@ import { ScreenScroll } from "@/components/screen";
 import { usePhone } from "@/state/phone";
 import { colors } from "@/theme/colors";
 import { usePaper } from "@/theme/theme";
-import { Redirect, router, Stack } from "expo-router";
+import { Redirect, router } from "expo-router";
 import { Pressable, Text, View } from "react-native";
+import { LaypTitle } from "@/components/layp-title";
 
 const ROWS = [
   { href: "/more/upcoming", label: "Upcoming" },
@@ -32,7 +33,7 @@ export default function MoreScreen() {
 
   return (
     <ScreenScroll>
-      <Stack.Title>More</Stack.Title>
+      <LaypTitle>More</LaypTitle>
       <View style={{ backgroundColor: colors.grouped, borderRadius: 16, borderCurve: "continuous", paddingHorizontal: 12 }}>
         {ROWS.map((row) => (
           <Pressable

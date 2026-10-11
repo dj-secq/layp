@@ -2,9 +2,10 @@ import { usePhone } from "@/state/phone";
 import { loadSession } from "@/link/store";
 import { colors, onPrimary, primary } from "@/theme/colors";
 import { usePaper } from "@/theme/theme";
-import { Redirect, Stack, useLocalSearchParams, useRouter } from "expo-router";
+import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, useColorScheme, View } from "react-native";
+import { LaypTitle } from "@/components/layp-title";
 
 export default function PairScreen() {
   useColorScheme();
@@ -51,7 +52,7 @@ function PairForm() {
       contentContainerStyle={{ padding: 20, gap: 16 }}
       style={{ flex: 1, backgroundColor: colors.background }}
     >
-      <Stack.Title>Layp</Stack.Title>
+      <LaypTitle>Layp</LaypTitle>
       <Text selectable style={{ color: colors.secondaryLabel, fontSize: 16 }}>
         Paste the full code from the computer.
       </Text>
@@ -103,7 +104,7 @@ function AddressForm({ onDone }: { onDone: () => void }) {
       contentContainerStyle={{ padding: 20, gap: 16 }}
       style={{ flex: 1, backgroundColor: colors.background }}
     >
-      <Stack.Title>Computer</Stack.Title>
+      <LaypTitle>Computer</LaypTitle>
       <Text selectable style={{ color: colors.secondaryLabel, fontSize: 16 }}>
         The pairing key stays on this phone.
       </Text>

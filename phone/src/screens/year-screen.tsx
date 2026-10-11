@@ -19,9 +19,10 @@ import {
   yearModes,
   type YearMode,
 } from "@layp/shared";
-import { Redirect, Stack, router } from "expo-router";
+import { Redirect, router } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
+import { LaypTitle } from "@/components/layp-title";
 
 export function YearScreen() {
   usePaper();
@@ -70,7 +71,7 @@ export function YearScreen() {
 
   return (
     <ScreenScroll>
-      <Stack.Title>Year</Stack.Title>
+      <LaypTitle>Year</LaypTitle>
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
         <TextButton label="Previous" onPress={() => setYear((value) => value - 1)} />
         <Text style={{ color: colors.label, fontSize: 17, fontWeight: "600" }}>{year}</Text>

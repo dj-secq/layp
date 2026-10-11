@@ -23,9 +23,10 @@ import { usePhone } from "@/state/phone";
 import { colors, ink } from "@/theme/colors";
 import { usePaper } from "@/theme/theme";
 import { DEFAULT_LIST_COLOR, STICKERS, movedIds, type TaskList } from "@layp/shared";
-import { Redirect, Stack, router } from "expo-router";
+import { Redirect, router } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
+import { LaypTitle } from "@/components/layp-title";
 
 export function ListsScreen() {
   usePaper();
@@ -80,7 +81,7 @@ export function ListsScreen() {
 
   return (
     <ScreenScroll>
-      <Stack.Title>Lists</Stack.Title>
+      <LaypTitle>Lists</LaypTitle>
       {lists === null ? <Text style={{ color: colors.label }}>Loading lists…</Text> : null}
       {error && lists !== null ? <Text selectable style={{ color: colors.label }}>{error}</Text> : null}
       {lists !== null && loose.length === 0 && folders.length === 0 ? (

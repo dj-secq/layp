@@ -7,9 +7,10 @@ import { usePhone } from "@/state/phone";
 import { colors } from "@/theme/colors";
 import { usePaper } from "@/theme/theme";
 import type { Task, TaskList } from "@layp/shared";
-import { Redirect, Stack, router } from "expo-router";
+import { Redirect, router } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
+import { LaypTitle } from "@/components/layp-title";
 
 const QUADRANTS = [
   { title: "Important and urgent", important: true, urgent: true },
@@ -71,7 +72,7 @@ export function MatrixScreen() {
 
   return (
     <ScreenScroll>
-      <Stack.Title>Matrix</Stack.Title>
+      <LaypTitle>Matrix</LaypTitle>
       {tasks === null ? <Text style={{ color: colors.label }}>Loading the matrix…</Text> : null}
       {error && tasks !== null ? <Text selectable style={{ color: colors.label }}>{error}</Text> : null}
       {open ? <TextButton label="All quadrants" onPress={() => setOpen(null)} /> : null}

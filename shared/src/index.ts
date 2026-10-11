@@ -14,6 +14,8 @@ export * from "./recurEdit";
 export * from "./remind";
 export * from "./rows";
 export * from "./search";
+export * from "./snippets";
+export * from "./suggest";
 export * from "./sleep";
 export * from "./spawn";
 export * from "./stats";
