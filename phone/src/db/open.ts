@@ -15,6 +15,20 @@ export function openPhoneDatabase(): Promise<SQLiteDatabase> {
   return opening;
 }
 
+export async function checkpointPhoneDatabase(): Promise<void> {
+  const db = await openPhoneDatabase();
+  await db.execAsync("PRAGMA wal_checkpoint(TRUNCATE)");
+}
+
+/** Drop the cached connection so the next open reads the file again. */
+export async function closePhoneDatabase(): Promise<void> {
+  const pending = opening;
+  opening = null;
+  if (!pending) return;
+  const db = await pending;
+  await db.closeAsync();
+}
+
 async function openFresh(): Promise<SQLiteDatabase> {
   const db = await openDatabaseAsync("layp.db", {}, Paths.document.uri);
   await db.execAsync("PRAGMA foreign_keys = ON");

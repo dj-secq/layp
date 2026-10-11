@@ -5,7 +5,6 @@ import {
   CalendarClock,
   CalendarDays,
   CalendarRange,
-  ChevronDown,
   ChevronRight,
   CircleHelp,
   Columns3,
@@ -51,9 +50,11 @@ import { DEFAULT_LIST_COLOR, STICKERS, stickerName } from "@layp/shared";
 import { useApp } from "../state/AppState";
 import { Button } from "./Button";
 import { Choice } from "./Choice";
+import { Collapse } from "./Collapse";
 import { Dialog } from "./Dialog";
 import { Field } from "./Field";
 import { MarkGlyph } from "./Mark";
+import { Presence, usePresence } from "../lib/motion";
 
 type Dest =
   | "today"
@@ -111,13 +112,13 @@ function Destination({
   icon,
   label,
   current,
-  iconOnly = false,
+  compact = false,
   onClick,
 }: {
   icon: Dest;
   label: string;
   current: boolean;
-  iconOnly?: boolean;
+  compact?: boolean;
   onClick: () => void;
 }) {
   return (
@@ -125,12 +126,11 @@ function Destination({
       type="button"
       className="nav-row"
       aria-current={current ? "page" : undefined}
-      aria-label={iconOnly ? label : undefined}
-      title={iconOnly ? label : undefined}
+      title={compact ? label : undefined}
       onClick={onClick}
     >
       <NavIcon name={icon} />
-      {iconOnly ? null : <span className="truncate">{label}</span>}
+      <span className="nav-label">{label}</span>
     </button>
   );
 }
@@ -147,12 +147,14 @@ function Disclosure({
   children: ReactNode;
 }) {
   return (
-    <div className="grid gap-1">
+    <div>
       <button type="button" className="nav-row" aria-expanded={open} onClick={onToggle}>
-        {open ? <ChevronDown size={16} strokeWidth={1.75} aria-hidden /> : <ChevronRight size={16} strokeWidth={1.75} aria-hidden />}
-        <span className="truncate">{label}</span>
+        <ChevronRight size={16} strokeWidth={1.75} aria-hidden />
+        <span className="nav-label">{label}</span>
       </button>
-      {open ? <div className="disclose-panel grid gap-1 pl-2">{children}</div> : null}
+      <Collapse open={open} className="collapse-gap-sm">
+        <div className="grid gap-1 pl-2">{children}</div>
+      </Collapse>
     </div>
   );
 }
@@ -175,6 +177,7 @@ export function Sidebar({ rail, narrow }: { rail: boolean; narrow: boolean }) {
   const [makingCountdown, setMakingCountdown] = useState(false);
   const [editingCountdown, setEditingCountdown] = useState<Countdown | null>(null);
   const [drawer, setDrawer] = useState(false);
+  const drawerPresence = usePresence(rail && drawer);
   const [moreOpen, setMoreOpen] = useState(() => moreScreens.has(app.route.screen));
   const [countdownsOpen, setCountdownsOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -310,43 +313,73 @@ export function Sidebar({ rail, narrow }: { rail: boolean; narrow: boolean }) {
     leave(() => app.goMonth(today.year, today.month));
   }
 
-  const inDrawer = narrow || !app.sidebarOpen;
-
-  function collapse() {
-    if (inDrawer) setDrawer(false);
-    else app.toggleSidebar();
-  }
-
-  const full = (
+  function sidebarBody(surface: "dock" | "drawer") {
+    const compact = surface === "dock" && rail;
+    const quickId = surface === "dock" ? "quick-add" : "quick-add-drawer";
+    const toggleLabel =
+      surface === "drawer" ? "Close menu" : compact ? (narrow ? "Open sidebar" : "Expand sidebar") : "Collapse sidebar";
+    function onToggle() {
+      if (surface === "drawer") {
+        setDrawer(false);
+        return;
+      }
+      if (compact && narrow) {
+        setDrawer(true);
+        return;
+      }
+      app.toggleSidebar();
+    }
+    return (
     <>
-      <div className="flex items-center gap-1">
+      <div className="sidebar-brand">
         <button
           type="button"
-          className="nav-row nav-icon"
-          aria-label={inDrawer ? "Close menu" : "Collapse sidebar"}
-          title={inDrawer ? "Close menu" : "Collapse sidebar"}
-          onClick={collapse}
+          className="nav-row nav-icon sidebar-toggle"
+          aria-label={toggleLabel}
+          title={toggleLabel}
+          onClick={onToggle}
         >
-          <PanelLeftClose size={16} strokeWidth={1.75} aria-hidden />
+          {compact ? <PanelLeft size={16} strokeWidth={1.75} aria-hidden /> : <PanelLeftClose size={16} strokeWidth={1.75} aria-hidden />}
         </button>
-        <button type="button" className="mark" onClick={() => leave(() => app.goToday())}>
+        <button
+          type="button"
+          className="mark mark-inline"
+          inert={compact ? true : undefined}
+          tabIndex={compact ? -1 : 0}
+          onClick={() => leave(() => app.goToday())}
+        >
           <MarkGlyph />
-          <span>Layp</span>
+          <span className="nav-label">Layp</span>
         </button>
+        <div className="mark-rail-slot">
+          <button
+            type="button"
+            className="mark"
+            aria-label="Layp, Today"
+            title="Layp"
+            inert={compact ? undefined : true}
+            tabIndex={compact ? 0 : -1}
+            onClick={() => app.goToday()}
+          >
+            <MarkGlyph />
+          </button>
+        </div>
       </div>
+      <div className="sidebar-quick" inert={compact ? true : undefined}>
+        <div className="sidebar-quick-inner">
       <form
-        ref={quickRef}
+        ref={surface === "drawer" || !drawer ? quickRef : undefined}
         onSubmit={(event) => {
           event.preventDefault();
           void addQuick();
         }}
       >
         <div className="quick-add">
-          <label className="sr-only" htmlFor="quick-add">
+          <label className="sr-only" htmlFor={quickId}>
             Quick add
           </label>
           <input
-            id="quick-add"
+            id={quickId}
             className="quick-add-input"
             placeholder="call mom tomorrow 9am"
             value={quick}
@@ -360,7 +393,7 @@ export function Sidebar({ rail, narrow }: { rail: boolean; narrow: boolean }) {
             type="button"
             className="quick-help"
             aria-expanded={quickHelp}
-            aria-controls="quick-add-format"
+            aria-controls={`${quickId}-format`}
             aria-label="Quick add format"
             onMouseDown={(event) => {
               event.preventDefault();
@@ -376,8 +409,8 @@ export function Sidebar({ rail, narrow }: { rail: boolean; narrow: boolean }) {
             <CircleHelp size={16} strokeWidth={1.75} aria-hidden />
           </button>
         </div>
-        {quickHelp ? (
-          <div className="quick-help-panel" id="quick-add-format">
+        <Collapse open={quickHelp}>
+          <div className="quick-help-panel" id={`${quickId}-format`}>
             <p className="quick-help-lead">Name the task, then any of these. Enter adds it.</p>
             <dl className="quick-help-list">
               <div>
@@ -424,28 +457,50 @@ export function Sidebar({ rail, narrow }: { rail: boolean; narrow: boolean }) {
               </div>
             </dl>
           </div>
-        ) : null}
+        </Collapse>
         {quickError ? (
           <p role="status" className="meta mt-1 text-danger">
             {quickError}
           </p>
         ) : null}
       </form>
+        </div>
+      </div>
 
       <div className="grid gap-1">
-        <Destination icon="today" label="Today" current={app.route.screen === "today"} onClick={() => leave(() => app.goToday())} />
+        <Destination compact={compact} icon="today" label="Today" current={app.route.screen === "today"} onClick={() => leave(() => app.goToday())} />
         {inbox ? (
           <Destination
+            compact={compact}
             icon="inbox"
             label="Inbox"
             current={app.route.screen === "list" && app.route.listId === inbox.id}
             onClick={() => leave(() => app.goList(inbox.id))}
           />
         ) : null}
-        <Destination icon="upcoming" label="Upcoming" current={app.route.screen === "upcoming"} onClick={() => leave(() => app.goUpcoming())} />
-        <Destination icon="calendar" label="Calendar" current={app.route.screen === "calendar"} onClick={() => leave(() => app.goCalendar())} />
+        <Destination compact={compact} icon="upcoming" label="Upcoming" current={app.route.screen === "upcoming"} onClick={() => leave(() => app.goUpcoming())} />
+        <Destination compact={compact} icon="calendar" label="Calendar" current={app.route.screen === "calendar"} onClick={() => leave(() => app.goCalendar())} />
       </div>
 
+      <div className="sidebar-more-slot">
+        <button
+          type="button"
+          className="nav-row"
+          aria-label="More"
+          title="More"
+          inert={compact ? undefined : true}
+          tabIndex={compact ? 0 : -1}
+          onClick={() => setDrawer(true)}
+        >
+          <Ellipsis size={16} strokeWidth={1.75} aria-hidden />
+          <span className="nav-label" aria-hidden="true">
+            More
+          </span>
+        </button>
+      </div>
+
+      <div className="sidebar-fold" inert={compact ? true : undefined}>
+        <div className="sidebar-fold-inner">
       <div className="grid gap-1">
         <p className="section-label">Lists</p>
         {lists
@@ -465,7 +520,7 @@ export function Sidebar({ rail, narrow }: { rail: boolean; narrow: boolean }) {
           const inFolder = app.lists.filter((list) => list.folderId === folder.id && !list.isInbox);
           const open = folder.id in folderOpen ? folderOpen[folder.id] : inFolder.length <= 3;
           return (
-            <div key={folder.id} className="grid gap-1">
+            <div key={folder.id}>
               <div className="grid gap-1">
                 <button
                   type="button"
@@ -473,7 +528,7 @@ export function Sidebar({ rail, narrow }: { rail: boolean; narrow: boolean }) {
                   aria-expanded={open}
                   onClick={() => setFolderOpen((current) => ({ ...current, [folder.id]: !open }))}
                 >
-                  {open ? <ChevronDown size={16} strokeWidth={1.75} aria-hidden /> : <ChevronRight size={16} strokeWidth={1.75} aria-hidden />}
+                  <ChevronRight size={16} strokeWidth={1.75} aria-hidden />
                   <span className="truncate">{folder.name}</span>
                 </button>
                 <div className="flex flex-wrap gap-1">
@@ -491,9 +546,13 @@ export function Sidebar({ rail, narrow }: { rail: boolean; narrow: boolean }) {
                   </Button>
                 </div>
               </div>
-              {open
-                ? inFolder.map((list) => <ListLink key={list.id} id={list.id} folders={folders} onOpen={() => setDrawer(false)} />)
-                : null}
+              <Collapse open={open} className="collapse-gap-sm">
+                <div className="grid gap-1">
+                  {inFolder.map((list) => (
+                    <ListLink key={list.id} id={list.id} folders={folders} onOpen={() => setDrawer(false)} />
+                  ))}
+                </div>
+              </Collapse>
             </div>
           );
         })}
@@ -604,80 +663,74 @@ export function Sidebar({ rail, narrow }: { rail: boolean; narrow: boolean }) {
           New filter
         </Button>
       </Disclosure>
-
-    </>
-  );
-
-  const foot = (
-    <Destination icon="settings" label="Settings" current={app.route.screen === "settings"} onClick={() => leave(() => app.goSettings())} />
-  );
-
-  const railNav = (
-    <>
-      <button
-        type="button"
-        className="nav-row"
-        aria-label={narrow ? "Open sidebar" : "Expand sidebar"}
-        title={narrow ? "Open sidebar" : "Expand sidebar"}
-        onClick={() => (narrow ? setDrawer(true) : app.toggleSidebar())}
-      >
-        <PanelLeft size={16} strokeWidth={1.75} aria-hidden />
-      </button>
-      <button type="button" className="mark" aria-label="Layp, Today" title="Layp" onClick={() => app.goToday()}>
-        <MarkGlyph />
-      </button>
-      <Destination icon="today" iconOnly label="Today" current={app.route.screen === "today"} onClick={() => app.goToday()} />
-      {inbox ? (
-        <Destination
-          icon="inbox"
-          iconOnly
-          label="Inbox"
-          current={app.route.screen === "list" && app.route.listId === inbox.id}
-          onClick={() => app.goList(inbox.id)}
-        />
-      ) : null}
-      <Destination icon="upcoming" iconOnly label="Upcoming" current={app.route.screen === "upcoming"} onClick={() => app.goUpcoming()} />
-      <Destination icon="calendar" iconOnly label="Calendar" current={app.route.screen === "calendar"} onClick={() => app.goCalendar()} />
-      <button type="button" className="nav-row" aria-label="More" title="More" onClick={() => setDrawer(true)}>
-        <Ellipsis size={16} strokeWidth={1.75} aria-hidden />
-      </button>
-      <div className="mt-auto grid gap-1">
-        <Destination icon="settings" iconOnly label="Settings" current={app.route.screen === "settings"} onClick={() => app.goSettings()} />
+        </div>
       </div>
+
     </>
-  );
+    );
+  }
+
+  function settingsRow(compact: boolean) {
+    return (
+      <Destination
+        compact={compact}
+        icon="settings"
+        label="Settings"
+        current={app.route.screen === "settings"}
+        onClick={() => leave(() => app.goSettings())}
+      />
+    );
+  }
 
   return (
     <>
       <aside className="sidebar" data-compact={rail ? "true" : undefined} aria-label="Sidebar">
-        {rail ? (
-          railNav
-        ) : (
-          <>
-            <div className="sidebar-scroll">{full}</div>
-            {foot}
-          </>
-        )}
+        <div className="sidebar-scroll">
+          <div className="sidebar-face">{sidebarBody("dock")}</div>
+        </div>
+        {settingsRow(rail)}
       </aside>
-      {rail && drawer ? (
+      {drawerPresence.mounted ? (
         <>
-          <button type="button" className="sidebar-scrim" aria-label="Close sidebar" onClick={() => setDrawer(false)} />
-          <aside ref={drawerRef} className="sidebar sidebar-drawer" aria-label="Sidebar">
-            <div className="sidebar-scroll">{full}</div>
-            {foot}
+          <button
+            type="button"
+            className="sidebar-scrim"
+            data-open={drawerPresence.shown ? "true" : "false"}
+            aria-label="Close sidebar"
+            onClick={() => setDrawer(false)}
+          />
+          <aside ref={drawerRef} className="sidebar sidebar-drawer" data-open={drawerPresence.shown ? "true" : "false"} aria-label="Sidebar">
+            <div className="sidebar-scroll">
+              <div className="sidebar-face">{sidebarBody("drawer")}</div>
+            </div>
+            {settingsRow(false)}
           </aside>
         </>
       ) : null}
-      {creating ? <NewListDialog onClose={() => setCreating(false)} /> : null}
-      {makingFolder ? <FolderDialog onClose={() => setMakingFolder(false)} /> : null}
-      {renamingFolder ? <RenameFolderDialog folder={renamingFolder} onClose={() => setRenamingFolder(null)} /> : null}
-      {deletingFolder ? <DeleteFolderDialog folder={deletingFolder} onClose={() => setDeletingFolder(null)} /> : null}
-      {makingCountdown ? <CountdownDialog initial={null} onClose={() => setMakingCountdown(false)} /> : null}
-      {editingCountdown ? (
-        <CountdownDialog initial={editingCountdown} onClose={() => setEditingCountdown(null)} />
-      ) : null}
-      {makingFilter ? <FilterDialog initial={null} onClose={() => setMakingFilter(false)} /> : null}
-      {editingFilter ? <FilterDialog initial={editingFilter} onClose={() => setEditingFilter(null)} /> : null}
+      <Presence open={creating}>
+        {creating ? <NewListDialog onClose={() => setCreating(false)} /> : null}
+      </Presence>
+      <Presence open={makingFolder}>
+        {makingFolder ? <FolderDialog onClose={() => setMakingFolder(false)} /> : null}
+      </Presence>
+      <Presence open={renamingFolder !== null}>
+        {renamingFolder ? <RenameFolderDialog folder={renamingFolder} onClose={() => setRenamingFolder(null)} /> : null}
+      </Presence>
+      <Presence open={deletingFolder !== null}>
+        {deletingFolder ? <DeleteFolderDialog folder={deletingFolder} onClose={() => setDeletingFolder(null)} /> : null}
+      </Presence>
+      <Presence open={makingCountdown}>
+        {makingCountdown ? <CountdownDialog initial={null} onClose={() => setMakingCountdown(false)} /> : null}
+      </Presence>
+      <Presence open={editingCountdown !== null}>
+        {editingCountdown ? <CountdownDialog initial={editingCountdown} onClose={() => setEditingCountdown(null)} /> : null}
+      </Presence>
+      <Presence open={makingFilter}>
+        {makingFilter ? <FilterDialog initial={null} onClose={() => setMakingFilter(false)} /> : null}
+      </Presence>
+      <Presence open={editingFilter !== null}>
+        {editingFilter ? <FilterDialog initial={editingFilter} onClose={() => setEditingFilter(null)} /> : null}
+      </Presence>
     </>
   );
 }
@@ -705,7 +758,9 @@ function ListLink({ id, folders, onOpen }: { id: string; folders: Folder[]; onOp
       <Button small aria-label={`Menu for ${list.name}`} onClick={() => setMenu(true)}>
         Menu
       </Button>
-      {menu ? <ListMenu listId={list.id} folders={folders} onClose={() => setMenu(false)} /> : null}
+      <Presence open={menu}>
+        {menu ? <ListMenu listId={list.id} folders={folders} onClose={() => setMenu(false)} /> : null}
+      </Presence>
     </div>
   );
 }

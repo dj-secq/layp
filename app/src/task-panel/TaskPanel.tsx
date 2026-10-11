@@ -10,15 +10,21 @@ import { useApp } from "../state/AppState";
 import { Check, RotateCcw, Trash2 } from "lucide-react";
 import { Button } from "../components/Button";
 import { Choice } from "../components/Choice";
+import { Fold } from "../components/Collapse";
 import { Dialog } from "../components/Dialog";
 import { Area, CheckField, Field } from "../components/Field";
+import { Presence, usePresence } from "../lib/motion";
 import { RecurrenceEditor } from "./RecurrenceEditor";
 import { ReminderEditor } from "./ReminderEditor";
 import { HistoryList, StartFocus, Subtasks, TagPicker } from "./TaskExtras";
 
 export function TaskPanel({ overlay }: { overlay: boolean }) {
   const app = useApp();
-  const id = app.openTaskId;
+  const liveId = app.openTaskId;
+  const heldId = useRef<string | null>(liveId);
+  if (liveId) heldId.current = liveId;
+  const presence = usePresence(Boolean(liveId));
+  const id = liveId ?? heldId.current;
   const [task, setTask] = useState<Task | null>(null);
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
@@ -35,10 +41,10 @@ export function TaskPanel({ overlay }: { overlay: boolean }) {
   const chain = useRef(Promise.resolve());
 
   useEffect(() => {
-    if (!id) return;
+    if (!liveId) return;
     let cancel = false;
     setMissing(false);
-    getTask(id)
+    getTask(liveId)
       .then((row) => {
         if (cancel) return;
         if (!row || row.deletedAt) {
@@ -54,7 +60,7 @@ export function TaskPanel({ overlay }: { overlay: boolean }) {
     return () => {
       cancel = true;
     };
-  }, [id]);
+  }, [liveId]);
 
   function adopt(row: Task) {
     draft.current = row;
@@ -114,26 +120,34 @@ export function TaskPanel({ overlay }: { overlay: boolean }) {
 
   useEffect(() => {
     const current = draft.current;
-    if (!current || !id || current.id !== id || title.trim() === current.title) return;
+    if (!current || !liveId || current.id !== liveId || title.trim() === current.title) return;
     const handle = window.setTimeout(() => {
-      if (draft.current?.id === id) saveTitle(title);
+      if (draft.current?.id === liveId) saveTitle(title);
     }, 400);
     return () => window.clearTimeout(handle);
-  }, [title, id]);
+  }, [title, liveId]);
 
   useEffect(() => {
     const current = draft.current;
-    if (!current || !id || current.id !== id || notes === current.notes) return;
+    if (!current || !liveId || current.id !== liveId || notes === current.notes) return;
     const handle = window.setTimeout(() => {
-      if (draft.current?.id === id) saveNotes(notes);
+      if (draft.current?.id === liveId) saveNotes(notes);
     }, 400);
     return () => window.clearTimeout(handle);
-  }, [notes, id]);
+  }, [notes, liveId]);
 
-  if (!id) return null;
+  if (!presence.mounted || !id) return null;
 
   return (
-    <aside className="task-panel" data-overlay={overlay} aria-label="Task">
+    <aside
+      className="task-panel"
+      data-overlay={overlay}
+      data-open={presence.shown ? "true" : "false"}
+      aria-hidden={presence.shown ? undefined : true}
+      inert={presence.shown ? undefined : true}
+      aria-label="Task"
+    >
+      <div className="task-panel-body">
       <div className="mb-4 flex items-center justify-between gap-2">
         <h2 className="page-title">Task</h2>
         <Button variant="ghost" onClick={() => app.setOpenTaskId(null)}>
@@ -270,16 +284,13 @@ export function TaskPanel({ overlay }: { overlay: boolean }) {
             onBlur={() => saveNotes(notes)}
           />
           <ChecklistRows taskId={task.id} notes={notes} onNotes={setNotes} />
-          <details className="fold">
-            <summary>Files</summary>
+          <Fold title="Files">
             <TaskFiles taskId={task.id} />
-          </details>
-          <details className="fold">
-            <summary>Recurrence</summary>
+          </Fold>
+          <Fold title="Recurrence">
             <RecurrenceEditor task={task} today={app.civilToday} onSave={enqueue} />
-          </details>
-          <details className="fold">
-            <summary>Estimate</summary>
+          </Fold>
+          <Fold title="Estimate">
             <div className="grid gap-2 pb-2">
               <Field
                 label="Estimated pomodoros"
@@ -302,15 +313,13 @@ export function TaskPanel({ overlay }: { overlay: boolean }) {
                 {task.estimatedPomos ? ` of ${task.estimatedPomos}` : ""}
               </p>
             </div>
-          </details>
-          <details className="fold">
-            <summary>Subtasks</summary>
+          </Fold>
+          <Fold title="Subtasks">
             <Subtasks parent={task} />
-          </details>
-          <details className="fold">
-            <summary>History</summary>
+          </Fold>
+          <Fold title="History">
             <HistoryList taskId={task.id} />
-          </details>
+          </Fold>
           {error && !error.startsWith("Duration") ? <p className="meta text-danger">{error}</p> : null}
           {notSaved ? (
             <Button variant="secondary" onClick={() => enqueue({ title, notes })}>
@@ -319,6 +328,7 @@ export function TaskPanel({ overlay }: { overlay: boolean }) {
           ) : null}
         </div>
       )}
+      <Presence open={Boolean(confirmTrash && task)}>
       {confirmTrash && task ? (
         <Dialog title="Move to trash?" onClose={() => setConfirmTrash(false)}>
           <p>
@@ -347,6 +357,8 @@ export function TaskPanel({ overlay }: { overlay: boolean }) {
           </div>
         </Dialog>
       ) : null}
+      </Presence>
+      <Presence open={conflict !== null}>
       {conflict ? (
         <Dialog title="Not saved" onClose={() => setConflict(null)}>
           <p>This was saved from a newer edit. Your latest keystrokes are still in the form.</p>
@@ -366,6 +378,8 @@ export function TaskPanel({ overlay }: { overlay: boolean }) {
           </div>
         </Dialog>
       ) : null}
+      </Presence>
+      </div>
     </aside>
   );
 }

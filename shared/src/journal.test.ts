@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { addDays } from "./dates";
 import {
   averageSleep,
+  sleepLine,
   cellScheduled,
   cleanLog,
   cleanTrackerDraft,
@@ -319,6 +320,18 @@ describe("averageSleep", () => {
   it("ignores null and rounds to one decimal", () => {
     expect(averageSleep([7, null, 8])).toBe(7.5);
     expect(averageSleep([null, Number.NaN])).toBeNull();
+  });
+});
+
+describe("sleepLine", () => {
+  it("keeps each night and leaves a gap where hours are missing", () => {
+    expect(sleepLine(7, [7, null, 8])).toEqual([7, null, 8]);
+    expect(sleepLine(28, [null])).toEqual([null]);
+  });
+
+  it("averages each week and skips a week with no nights", () => {
+    const hours = [...Array<number | null>(7).fill(8), ...Array<number | null>(7).fill(null), 6, 8];
+    expect(sleepLine(365, hours)).toEqual([8, null, 7]);
   });
 });
 

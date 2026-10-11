@@ -294,18 +294,35 @@ button {
   .press-sm:active,
   .sidebar,
   .nav-row svg,
+  .nav-label,
+  .mark-inline,
+  .mark-rail-slot,
+  .sidebar-brand,
+  .sidebar-quick,
+  .sidebar-fold,
+  .sidebar-more-slot,
+  .sidebar-drawer,
+  .sidebar-scrim,
+  .reveal,
+  .fold-summary svg,
+  .choice-button svg,
+  .choice-menu,
+  .month-picker,
+  .task-panel,
+  .dialog,
+  .overlay,
+  .board-card,
+  .board-column,
+  .matrix-card,
+  .matrix-quad,
+  .timeline-item,
+  .cal-block,
   .focus-ring {
     transition: none;
   }
 
-  .sidebar-drawer,
-  .sidebar-scrim,
-  .task-panel,
-  .dialog,
-  .overlay,
   .main-pane,
   .task-row[data-enter="true"],
-  .disclose-panel,
   .skeleton-block {
     animation: none;
   }
@@ -506,6 +523,14 @@ button:disabled {
   text-align: left;
 }
 
+.choice-button svg {
+  transition: transform 160ms ease;
+}
+
+.choice-button[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+
 .choice-menu {
   position: absolute;
   z-index: 70;
@@ -520,6 +545,18 @@ button:disabled {
   border: 1px solid var(--border);
   border-radius: 8px;
   box-shadow: var(--shadow);
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 150ms ease, transform 160ms ease;
+}
+
+.choice-menu[data-open="false"] .choice-option {
+  pointer-events: none;
+}
+
+.choice-menu[data-open="true"] {
+  opacity: 1;
+  transform: none;
 }
 
 .choice-option {
@@ -624,29 +661,45 @@ button:disabled {
   place-items: center;
   z-index: 50;
   padding: 24px;
-  animation: layp-fade 160ms ease;
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+
+.overlay[data-open="true"] {
+  opacity: 1;
 }
 
 .dialog {
   width: min(440px, 100%);
   max-height: min(640px, calc(100vh - 48px));
   overflow: auto;
-  animation: layp-dialog 160ms ease;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 10px;
   box-shadow: var(--shadow);
   padding: 20px;
+  opacity: 0;
+  transform: translateY(6px);
+  pointer-events: none;
+  transition: opacity 160ms ease, transform 180ms ease;
+}
+
+.dialog[data-open="true"] {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
 }
 
 .sidebar {
-  width: 248px;
+  --sidebar-open: 248px;
+  width: var(--sidebar-open);
   flex: none;
   background: var(--surface);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   min-height: 0;
+  min-width: 0;
   overflow: hidden;
   padding: 12px 3px 12px 10px;
   gap: 8px;
@@ -656,6 +709,8 @@ button:disabled {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   transition: width 180ms ease;
+  container-type: inline-size;
+  container-name: rail;
 }
 
 .sidebar[data-compact="true"],
@@ -708,6 +763,7 @@ button:disabled {
 .sidebar-scroll {
   flex: 1 1 auto;
   min-height: 0;
+  min-width: 0;
   overflow-x: hidden;
   overflow-y: scroll;
   scrollbar-gutter: stable;
@@ -716,21 +772,173 @@ button:disabled {
   gap: 8px;
 }
 
-.sidebar[data-compact="true"] {
-  width: 64px;
-  align-items: center;
-  overflow: auto;
-  padding: 10px 8px;
-  gap: 6px;
+.sidebar-face {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: max(100%, 220px);
+  flex: none;
 }
 
-.sidebar[data-compact="true"] .nav-row,
+/* Keep the open padding and left edge while the width animates.
+   Centering the icons in the shrinking column slides them right to left. */
+.sidebar[data-compact="true"] {
+  width: 64px;
+  align-items: stretch;
+  overflow: hidden;
+  /* WebKit hit-tests the 220px face past this clip. Keep clicks inside the rail. */
+  clip-path: inset(0);
+}
+
+.sidebar[data-compact="true"] .sidebar-scroll {
+  overflow-y: auto;
+  scrollbar-gutter: auto;
+}
+
+.sidebar-brand {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  grid-template-rows: auto 0fr;
+  column-gap: 4px;
+  row-gap: 0;
+  align-items: center;
+  justify-items: start;
+  transition: grid-template-rows 180ms ease, row-gap 180ms ease;
+}
+
+.sidebar-toggle {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.mark-inline {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+  transition: opacity 150ms ease;
+}
+
+.mark-rail-slot {
+  grid-column: 1;
+  grid-row: 2;
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+
+.sidebar[data-compact="true"] .sidebar-brand {
+  grid-template-rows: auto 1fr;
+  row-gap: 4px;
+}
+
+.sidebar[data-compact="true"] .mark-inline {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* The face stays wide so labels fade in place. Its box must not take clicks, or the
+   invisible overflow covers the page beside the rail. */
+.sidebar[data-compact="true"] .sidebar-face,
+.sidebar[data-compact="true"] .sidebar-quick,
+.sidebar[data-compact="true"] .sidebar-fold {
+  pointer-events: none;
+}
+
+.sidebar[data-compact="true"] .sidebar-face .nav-row,
+.sidebar[data-compact="true"] .sidebar-face .mark-rail-slot .mark {
+  pointer-events: auto;
+}
+
+.sidebar[data-compact="true"] .sidebar-face .nav-row {
+  width: 40px;
+  max-width: 40px;
+}
+
+.sidebar[data-compact="true"] .mark-rail-slot {
+  opacity: 1;
+}
+
+.sidebar-quick,
+.sidebar-fold {
+  display: grid;
+  grid-template-rows: 1fr;
+  min-height: 0;
+  transition: grid-template-rows 180ms ease, opacity 150ms ease, margin-top 180ms ease;
+}
+
+.sidebar-quick-inner,
+.sidebar-fold-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.sidebar[data-compact="true"] .sidebar-quick,
+.sidebar[data-compact="true"] .sidebar-fold {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* A collapsed sibling still takes a flex gap. Pull these closed so the rail icons share one step. */
+.sidebar[data-compact="true"] .sidebar-quick {
+  margin-top: -12px;
+}
+
+.sidebar[data-compact="true"] .sidebar-fold {
+  margin-top: -8px;
+}
+
+.sidebar-more-slot {
+  display: grid;
+  grid-template-rows: 0fr;
+  margin-top: -8px;
+  opacity: 0;
+  pointer-events: none;
+  transition: grid-template-rows 180ms ease, opacity 150ms ease, margin-top 180ms ease;
+}
+
+.sidebar-more-slot > .nav-row {
+  min-height: 0;
+  overflow: hidden;
+  border-width: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.sidebar[data-compact="true"] .sidebar-more-slot {
+  grid-template-rows: 1fr;
+  margin-top: -4px;
+  opacity: 1;
+  pointer-events: none;
+}
+
+.sidebar[data-compact="true"] .sidebar-more-slot > .nav-row {
+  min-height: 36px;
+  border-width: 2px;
+}
+
 .nav-icon {
   width: 40px;
   min-height: 40px;
   justify-content: center;
   padding: 0;
   flex: none;
+}
+
+/* Same icon inset as .nav-row (border 2px + padding 8px) so the rail shares one column. */
+.sidebar[data-compact="true"] .sidebar-face .sidebar-toggle {
+  width: 36px;
+  max-width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0 8px;
+  justify-content: flex-start;
+  pointer-events: auto;
 }
 
 .sidebar-scrim {
@@ -740,7 +948,14 @@ button:disabled {
   border: 0;
   padding: 0;
   background: rgb(0 0 0 / 40%);
-  animation: layp-fade 160ms ease;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms ease;
+}
+
+.sidebar-scrim[data-open="true"] {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .sidebar-drawer {
@@ -751,7 +966,16 @@ button:disabled {
   left: 0;
   width: min(280px, calc(100vw - 16px));
   box-shadow: var(--shadow);
-  animation: layp-drawer 180ms ease;
+  opacity: 0;
+  transform: translateX(-16px);
+  pointer-events: none;
+  transition: opacity 160ms ease, transform 180ms ease;
+}
+
+.sidebar-drawer[data-open="true"] {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
 }
 
 .mark {
@@ -789,6 +1013,7 @@ button:disabled {
   font-weight: 500;
   text-align: left;
   color: var(--ink);
+  position: relative;
 }
 
 .nav-row[aria-current="page"] {
@@ -796,6 +1021,41 @@ button:disabled {
   color: var(--ink);
   border-color: var(--ink);
   box-shadow: none;
+}
+
+/* Once the column is narrower than the row, keep the current mark as a square on the icon.
+   The row itself stays wide so the label can fade in place. */
+@container rail (max-width: 219px) {
+  .nav-row[aria-current="page"] {
+    background: transparent;
+    border-color: transparent;
+  }
+
+  .nav-row[aria-current="page"]::before,
+  .nav-row:focus-visible::before {
+    content: "";
+    position: absolute;
+    left: -2px;
+    top: -2px;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    pointer-events: none;
+  }
+
+  .nav-row[aria-current="page"]::before {
+    border: 2px solid var(--ink);
+    background: var(--muted);
+  }
+
+  .nav-row:focus-visible {
+    outline: none;
+  }
+
+  .nav-row:focus-visible::before {
+    outline: 2px solid var(--ink);
+    outline-offset: 2px;
+  }
 }
 
 .section-label {
@@ -807,12 +1067,75 @@ button:disabled {
   padding: 8px 4px 0;
 }
 
+/* Only the collapsed rail needs the icon above its highlight. A stacking context on every
+   row makes WebKit skip the rows inside an open More section. */
+.sidebar[data-compact="true"] .nav-row > svg {
+  position: relative;
+  z-index: 1;
+}
+
 .nav-row svg {
+  flex: none;
   transition: transform 160ms ease;
 }
 
-.disclose-panel {
-  animation: layp-reveal 160ms ease;
+.nav-row[aria-expanded="true"] > svg {
+  transform: rotate(90deg);
+}
+
+.nav-label {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: clip;
+  transition: opacity 150ms ease;
+}
+
+.sidebar[data-compact="true"] .nav-label {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Not named collapse: Tailwind's .collapse utility sets visibility:collapse, and
+   that value is inherited, so an open section kept its height and painted nothing. */
+.reveal {
+  display: grid;
+  grid-template-rows: 0fr;
+  flex: none;
+  min-height: 0;
+  overflow: hidden;
+  visibility: visible;
+  opacity: 0;
+  pointer-events: none;
+  transition: grid-template-rows 180ms ease, opacity 150ms ease, margin-top 180ms ease;
+}
+
+.reveal[data-open="true"] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.collapse-gap[data-open="true"] {
+  margin-top: 8px;
+}
+
+.collapse-gap-sm[data-open="true"] {
+  margin-top: 4px;
+}
+
+.collapse-gap-lg[data-open="true"] {
+  margin-top: 12px;
+}
+
+.reveal-inner {
+  min-height: 0;
+  overflow: hidden;
+  visibility: visible;
+}
+
+.reveal[data-open="true"] > .reveal-inner {
+  overflow: visible;
 }
 
 .main-pane {
@@ -1042,35 +1365,29 @@ button:disabled {
   padding-top: 4px;
 }
 
-.fold > summary {
+.fold-summary {
   display: flex;
   align-items: center;
+  gap: 8px;
+  width: 100%;
   min-height: 36px;
+  padding: 0;
+  border: 0;
+  background: transparent;
   cursor: pointer;
   font-size: 13px;
   font-weight: 700;
   color: var(--ink);
-  list-style: none;
+  text-align: left;
 }
 
-.fold > summary::-webkit-details-marker {
-  display: none;
+.fold-summary svg {
+  flex: none;
+  transition: transform 160ms ease;
 }
 
-.fold > summary::before {
-  content: "";
-  display: inline-block;
-  width: 0;
-  height: 0;
-  margin-right: 8px;
-  border-top: 4px solid transparent;
-  border-bottom: 4px solid transparent;
-  border-left: 5px solid var(--ink-soft);
-}
-
-.fold[open] > summary::before {
+.fold-summary[aria-expanded="true"] svg {
   transform: rotate(90deg);
-  transform-origin: 2px 4px;
 }
 
 .task-panel {
@@ -1086,7 +1403,48 @@ button:disabled {
   border-radius: 0;
   box-shadow: var(--shadow);
   padding: 16px;
-  animation: layp-panel 180ms ease;
+  opacity: 1;
+  transform: none;
+  transition:
+    width 180ms ease,
+    padding 180ms ease,
+    border-color 180ms ease,
+    border-left-width 180ms ease,
+    opacity 160ms ease,
+    transform 180ms ease;
+}
+
+.task-panel[data-open="false"] {
+  width: 0;
+  padding-left: 0;
+  padding-right: 0;
+  border-left-color: transparent;
+  border-left-width: 0;
+  opacity: 0;
+  transform: translateX(16px);
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.task-panel-body {
+  min-width: 0;
+}
+
+.task-panel[data-open="false"] .task-panel-body {
+  width: 348px;
+}
+
+.month-picker {
+  opacity: 0;
+  transform: translateY(6px);
+  pointer-events: none;
+  transition: opacity 160ms ease, transform 180ms ease;
+}
+
+.month-picker[data-open="true"] {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
 }
 
 .task-form {
@@ -1215,6 +1573,10 @@ button:disabled {
   border: 1px solid var(--border);
   border-radius: 0;
   box-shadow: var(--shadow);
+}
+
+.task-panel[data-overlay="true"][data-open="false"] {
+  border-width: 0;
 }
 
 .shell {
@@ -1523,6 +1885,12 @@ button.month-cell {
   box-shadow: none;
   padding: 2px 4px;
   text-align: left;
+  transition: box-shadow 120ms ease;
+}
+
+.cal-block[data-dragging="true"] {
+  z-index: 2;
+  box-shadow: var(--shadow);
 }
 
 .cal-resize {
@@ -1578,6 +1946,36 @@ button.month-cell {
   border-left-color: var(--ink-soft);
 }
 
+.board-column,
+.matrix-quad,
+.board-card,
+.matrix-card {
+  outline: 2px solid transparent;
+  outline-offset: -2px;
+}
+
+.board-column,
+.matrix-quad {
+  transition: outline-color 120ms ease;
+}
+
+.board-card,
+.matrix-card {
+  transition: opacity 120ms ease, background 80ms linear, filter 80ms linear, outline-color 120ms ease;
+}
+
+.board-column[data-over="true"],
+.matrix-quad[data-over="true"],
+.board-card[data-over="true"],
+.matrix-card[data-over="true"] {
+  outline-color: var(--ink);
+}
+
+.board-card[data-dragging="true"],
+.matrix-card[data-dragging="true"] {
+  opacity: 0.45;
+}
+
 .timeline-row {
   position: relative;
   z-index: 1;
@@ -1612,6 +2010,12 @@ button.month-cell {
   color: var(--ink);
   text-align: left;
   padding: 0;
+  transition: opacity 120ms ease;
+}
+
+.timeline-item[data-dragging="true"] {
+  opacity: 0.8;
+  z-index: 4;
 }
 
 .timeline-item[data-mark="false"] {

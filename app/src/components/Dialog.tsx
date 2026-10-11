@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { useShown } from "../lib/motion";
 import { useApp } from "../state/AppState";
 
 const FOCUSABLE = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
@@ -14,6 +15,7 @@ export function Dialog({
   children: ReactNode;
 }) {
   const titleId = useId();
+  const shown = useShown();
   const ref = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
   const { pushLayer, popLayer } = useApp();
@@ -60,13 +62,14 @@ export function Dialog({
   }, []);
 
   return createPortal(
-    <div className="overlay" onMouseDown={() => onCloseRef.current()}>
+    <div className="overlay" data-open={shown ? "true" : "false"} onMouseDown={() => onCloseRef.current()}>
       <div
         ref={ref}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
         className="dialog"
+        data-open={shown ? "true" : "false"}
         tabIndex={-1}
         onMouseDown={(event) => event.stopPropagation()}
       >

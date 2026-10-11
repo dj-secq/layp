@@ -1,6 +1,7 @@
 import { Plus, Timer } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "../components/Button";
+import { Collapse } from "../components/Collapse";
 import { useFocus } from "../components/FocusTimer";
 import { historyForTask, type HistoryRow } from "../db/history";
 import { createTag, loadTags, setTaskTag, tagsForTask, type Tag } from "../db/tags";
@@ -157,7 +158,7 @@ function SubtaskBranch({
   const [adding, setAdding] = useState(false);
 
   return (
-    <div className="grid gap-2" style={{ marginLeft: depth === 0 ? 0 : 16 }}>
+    <div className="grid" style={{ marginLeft: depth === 0 ? 0 : 16 }}>
       <div className="flex items-center gap-2">
         <input
           type="checkbox"
@@ -182,10 +183,16 @@ function SubtaskBranch({
           {adding ? "Cancel" : "Add subtask"}
         </Button>
       </div>
-      {adding ? <AddSubtask parent={task} onError={onError} /> : null}
-      {node.children.map((child) => (
-        <SubtaskBranch key={child.task.id} node={child} depth={depth + 1} onError={onError} />
-      ))}
+      <Collapse open={adding} className="collapse-gap">
+        <AddSubtask parent={task} onError={onError} />
+      </Collapse>
+      {node.children.length > 0 ? (
+        <div className="mt-2 grid gap-2">
+          {node.children.map((child) => (
+            <SubtaskBranch key={child.task.id} node={child} depth={depth + 1} onError={onError} />
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

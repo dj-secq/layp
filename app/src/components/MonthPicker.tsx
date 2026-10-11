@@ -2,6 +2,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Temporal } from "temporal-polyfill";
 import { monthCells, monthLabel, shiftMonth, weekdayLabels, type WeekStart } from "@layp/shared";
+import { useShown } from "../lib/motion";
 import { useApp } from "../state/AppState";
 import { Button } from "./Button";
 
@@ -19,6 +20,7 @@ export function MonthPicker({
   const initial = Temporal.PlainDate.from(value);
   const [cursor, setCursor] = useState({ year: initial.year, month: initial.month });
   const { pushLayer, popLayer } = useApp();
+  const shown = useShown();
   const cells = monthCells(cursor.year, cursor.month, weekStart);
   const labels = weekdayLabels(weekStart);
 
@@ -40,7 +42,7 @@ export function MonthPicker({
   }, [onClose]);
 
   return (
-    <div className="panel absolute z-40 mt-2 w-[280px]" role="dialog" aria-label="Choose a date">
+    <div className="panel month-picker absolute z-40 mt-2 w-[280px]" data-open={shown ? "true" : "false"} role="dialog" aria-label="Choose a date">
       <div className="mb-3 flex items-center justify-between gap-2">
         <Button small aria-label="Previous month" onClick={() => setCursor((current) => shiftMonth(current.year, current.month, -1))}>
           <ChevronLeft size={16} aria-hidden />

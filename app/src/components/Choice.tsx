@@ -1,6 +1,7 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown } from "lucide-react";
+import { usePresence } from "../lib/motion";
 
 export function Choice({
   label,
@@ -19,19 +20,28 @@ export function Choice({
 }) {
   const [open, setOpen] = useState(false);
   const [box, setBox] = useState<{ top: number; left: number; width: number } | null>(null);
+  const presence = usePresence(open);
   const root = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const placed = useRef(box);
   const labelId = useId();
   const current = options.find((option) => option.value === value) ?? options[0];
+  if (box) placed.current = box;
+  const menuBox = box ?? placed.current;
+
+  function place() {
+    const rect = buttonRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setBox({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+  }
+
+  useLayoutEffect(() => {
+    if (open) place();
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
-    function place() {
-      const rect = buttonRef.current?.getBoundingClientRect();
-      if (!rect) return;
-      setBox({ top: rect.bottom + 4, left: rect.left, width: rect.width });
-    }
     function onPointer(event: PointerEvent) {
       const target = event.target as Node;
       if (root.current?.contains(target) || menuRef.current?.contains(target)) return;
@@ -72,14 +82,15 @@ export function Choice({
           <span className="truncate">{current?.label}</span>
           <ChevronDown size={16} strokeWidth={1.75} aria-hidden />
         </button>
-        {open && box
+        {presence.mounted && menuBox
           ? createPortal(
               <div
                 ref={menuRef}
                 className="choice-menu"
+                data-open={presence.shown ? "true" : "false"}
                 role="listbox"
                 aria-labelledby={labelId}
-                style={{ position: "fixed", top: box.top, left: box.left, width: box.width, zIndex: 70 }}
+                style={{ position: "fixed", top: menuBox.top, left: menuBox.left, width: menuBox.width, zIndex: 70 }}
               >
                 {options.map((option) => (
                   <button

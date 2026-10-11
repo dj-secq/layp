@@ -232,6 +232,14 @@ export function averageSleep(hours: Array<number | null>): number | null {
   return Math.round(average * 10) / 10;
 }
 
+/** One point per night. A year is one point per week, the average of the nights that have hours. A missing night stays a gap. */
+export function sleepLine(span: number, hours: Array<number | null>): Array<number | null> {
+  if (span !== 365) return hours;
+  const weeks: Array<number | null> = [];
+  for (let index = 0; index < hours.length; index += 7) weeks.push(averageSleep(hours.slice(index, index + 7)));
+  return weeks;
+}
+
 function cleanedSchedule(schedule: Schedule): { ok: true; schedule: Schedule } | { ok: false; error: string } {
   if (schedule.type === "daily") return { ok: true, schedule: { type: "daily" } };
   if (schedule.type === "weekdays") {

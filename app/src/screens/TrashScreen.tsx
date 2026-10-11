@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Button } from "../components/Button";
 import { Skeleton, useViewLoad } from "../components/Skeleton";
 import { Dialog } from "../components/Dialog";
+import { Presence } from "../lib/motion";
 import { emptyTrash, purgeTask, restoreTask, trashedTasks } from "../db/tasks";
 import type { Task } from "../db/types";
 import { useApp } from "../state/AppState";
@@ -74,6 +75,7 @@ export function TrashScreen() {
           </Button>
         </div>
       )) : null}
+      <Presence open={confirmEmpty}>
       {confirmEmpty ? (
         <Dialog title="Empty trash?" onClose={() => setConfirmEmpty(false)}>
           <p>This permanently deletes every task in the trash.</p>
@@ -96,6 +98,7 @@ export function TrashScreen() {
           </div>
         </Dialog>
       ) : null}
+      </Presence>
       </div>
     </>
   );

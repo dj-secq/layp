@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { patchTask, tasksOpen } from "../db/tasks";
 import type { Task } from "../db/types";
 import { Skeleton, useViewLoad } from "../components/Skeleton";
+import { clearDragging, clearDrop, enterDrop, leaveDrop, markDragging } from "../lib/drag";
 import { useApp } from "../state/AppState";
 
 const QUADRANTS = [
@@ -52,8 +53,11 @@ export function MatrixScreen() {
               key={quadrant.title}
               className="panel matrix-quad grid min-h-40 content-start gap-2"
               data-tone={quadrant.tone}
+              onDragEnter={enterDrop}
+              onDragLeave={leaveDrop}
               onDragOver={(event) => event.preventDefault()}
               onDrop={(event) => {
+                clearDrop(event);
                 event.preventDefault();
                 const taskId = event.dataTransfer.getData("text/plain");
                 if (taskId) void drop(taskId, quadrant.important, quadrant.urgent);
@@ -68,9 +72,16 @@ export function MatrixScreen() {
                     key={task.id}
                     type="button"
                     draggable
-                    className="press btn-secondary items-center justify-start gap-2 text-left"
+                    className="press matrix-card btn-secondary items-center justify-start gap-2 text-left"
                     style={{ width: "100%", justifyContent: "flex-start" }}
-                    onDragStart={(event) => event.dataTransfer.setData("text/plain", task.id)}
+                    onDragStart={(event) => {
+                      event.dataTransfer.setData("text/plain", task.id);
+                      event.dataTransfer.effectAllowed = "move";
+                      markDragging(event);
+                    }}
+                    onDragEnd={clearDragging}
+                    onDragEnter={enterDrop}
+                    onDragLeave={leaveDrop}
                     onClick={() => app.setOpenTaskId(task.id)}
                   >
                     <span className="priority-mark" style={{ background: color }} aria-hidden />

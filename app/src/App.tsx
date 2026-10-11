@@ -26,6 +26,7 @@ import { TrackersScreen } from "./screens/TrackersScreen";
 import { UpcomingScreen } from "./screens/UpcomingScreen";
 import { YearScreen } from "./screens/YearScreen";
 import { AppProvider, useApp, type Route } from "./state/AppState";
+import { Presence } from "./lib/motion";
 import { TaskPanel } from "./task-panel/TaskPanel";
 import { Button } from "./components/Button";
 import { MarkGlyph } from "./components/Mark";
@@ -156,9 +157,11 @@ function Shell() {
           {app.route.screen === "trash" ? <TrashScreen /> : null}
           {app.route.screen === "filter" ? <FilterScreen filterId={app.route.filterId} /> : null}
         </main>
-        {app.openTaskId ? <TaskPanel overlay={narrow} /> : null}
+        <TaskPanel overlay={narrow} />
       </div>
-      {app.helpOpen ? <Shortcuts onClose={() => app.setHelpOpen(false)} /> : null}
+      <Presence open={app.helpOpen}>
+        {app.helpOpen ? <Shortcuts onClose={() => app.setHelpOpen(false)} /> : null}
+      </Presence>
     </div>
     </DesktopShell>
     </FocusProvider>

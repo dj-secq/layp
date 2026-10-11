@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { getDay, saveDay } from "../db/days";
 import { emptyDay, type Day } from "../db/types";
-import { MOOD_COLORS } from "@layp/shared";
+import { MOOD_COLORS, type SleepTimes } from "@layp/shared";
 import { formatClock, parseClock } from "@layp/shared";
 import { useApp } from "../state/AppState";
 import { cleanSleep, formatHours, suggestedSleepHours } from "@layp/shared";
@@ -9,9 +9,27 @@ import { Button } from "./Button";
 import { Skeleton } from "./Skeleton";
 import { DayTrackers } from "./DayTrackers";
 import { Dialog } from "./Dialog";
+import { Presence } from "../lib/motion";
+import { SleepNow } from "./SleepNow";
+
+function newerThan(current: Day | null, row: Day | null, date: string): boolean {
+  if (!current || current.day !== date || !current.updatedAt) return false;
+  if (!row) return true;
+  return current.updatedAt > row.updatedAt;
+}
+
+export type SleepBridge = {
+  focused: () => boolean;
+  snapshot: () => SleepTimes | null;
+  /** Show a row that was just saved, without writing it again. */
+  applySaved: (row: Day) => void;
+  clearBed: () => void;
+};
 
 export function DayRecord({ date }: { date: string }) {
-  const clock = useApp().settings.clock;
+  const app = useApp();
+  const clock = app.settings.clock;
+  const bridge = useRef<SleepBridge | null>(null);
   const [record, setRecord] = useState<Day | null>(null);
   const [sleepText, setSleepText] = useState("");
   const [bedText, setBedText] = useState("");
@@ -25,6 +43,11 @@ export function DayRecord({ date }: { date: string }) {
   const expected = useRef("");
   const chain = useRef(Promise.resolve());
   const hydrated = useRef(false);
+  const sleepFocused = useRef(false);
+  const diaryRef = useRef(diary);
+  const noteRef = useRef(note);
+  diaryRef.current = diary;
+  noteRef.current = note;
 
   function adopt(next: Day) {
     draft.current = next;
@@ -47,7 +70,7 @@ export function DayRecord({ date }: { date: string }) {
     getDay(date)
       .then((row) => {
         if (cancel) return;
-        adopt(row ?? emptyDay(date));
+        if (!newerThan(draft.current, row, date)) adopt(row ?? emptyDay(date));
         hydrated.current = true;
       })
       .catch(() => {
@@ -99,6 +122,61 @@ export function DayRecord({ date }: { date: string }) {
   }
 
   useEffect(() => {
+    bridge.current = {
+      focused: () => sleepFocused.current,
+      snapshot() {
+        const current = draft.current;
+        if (!current || current.day !== date) return null;
+        return {
+          day: current.day,
+          sleepBed: current.sleepBed,
+          sleepWake: current.sleepWake,
+          sleepHours: current.sleepHours,
+        };
+      },
+      applySaved(row) {
+        const current = draft.current;
+        if (!current || current.day !== row.day) return;
+        const sameSleep =
+          current.sleepBed === row.sleepBed && current.sleepWake === row.sleepWake && current.sleepHours === row.sleepHours;
+        const dirty =
+          sleepFocused.current || diaryRef.current !== current.diary || noteRef.current !== current.workoutNote;
+        if (sameSleep && (dirty || current.updatedAt === row.updatedAt)) return;
+        if (!dirty) {
+          adopt(row);
+          return;
+        }
+        if (sleepFocused.current) return;
+        const next = {
+          ...current,
+          sleepBed: row.sleepBed,
+          sleepWake: row.sleepWake,
+          sleepHours: row.sleepHours,
+          updatedAt: row.updatedAt,
+        };
+        draft.current = next;
+        expected.current = row.updatedAt;
+        setRecord(next);
+        setSleepError(null);
+        setSleepText(row.sleepHours === null ? "" : String(row.sleepHours));
+        setBedText(row.sleepBed ? formatClock(row.sleepBed, clock) : "");
+        setWakeText(row.sleepWake ? formatClock(row.sleepWake, clock) : "");
+      },
+      clearBed() {
+        const current = draft.current;
+        if (!current || current.day !== date || current.sleepWake) return;
+        const next = { ...current, sleepBed: null };
+        draft.current = next;
+        setRecord(next);
+        setBedText("");
+      },
+    };
+    return () => {
+      bridge.current = null;
+    };
+  });
+
+  useEffect(() => {
     if (!hydrated.current || draft.current?.day !== date) return;
     if (diary === draft.current.diary) return;
     const handle = window.setTimeout(() => {
@@ -125,6 +203,7 @@ export function DayRecord({ date }: { date: string }) {
           {notSaved ? "Not saved" : ""}
         </span>
       </div>
+      <SleepNow clock={clock} viewedDay={date} bridge={bridge} revision={app.revision} />
 
       <label className="grid gap-1">
         <span className="label">Sleep</span>
@@ -136,7 +215,11 @@ export function DayRecord({ date }: { date: string }) {
             value={sleepText}
             placeholder="Hours"
             onChange={(event) => setSleepText(event.target.value)}
+            onFocus={() => {
+              sleepFocused.current = true;
+            }}
             onBlur={() => {
+              sleepFocused.current = false;
               const parsed = cleanSleep(sleepText);
               if ("error" in parsed) {
                 setSleepError(parsed.error);
@@ -162,7 +245,13 @@ export function DayRecord({ date }: { date: string }) {
             value={bedText}
             placeholder={clock === "12" ? "11:30 PM" : "23:30"}
             onChange={(event) => setBedText(event.target.value)}
-            onBlur={() => commitTime(bedText, "sleepBed", setBedText)}
+            onFocus={() => {
+              sleepFocused.current = true;
+            }}
+            onBlur={() => {
+              sleepFocused.current = false;
+              commitTime(bedText, "sleepBed", setBedText);
+            }}
           />
         </label>
         <label className="grid gap-1">
@@ -173,7 +262,13 @@ export function DayRecord({ date }: { date: string }) {
             value={wakeText}
             placeholder={clock === "12" ? "7:00 AM" : "07:00"}
             onChange={(event) => setWakeText(event.target.value)}
-            onBlur={() => commitTime(wakeText, "sleepWake", setWakeText)}
+            onFocus={() => {
+              sleepFocused.current = true;
+            }}
+            onBlur={() => {
+              sleepFocused.current = false;
+              commitTime(wakeText, "sleepWake", setWakeText);
+            }}
           />
         </label>
       </div>
@@ -279,6 +374,7 @@ export function DayRecord({ date }: { date: string }) {
         </Button>
       ) : null}
 
+      <Presence open={conflict !== null}>
       {conflict ? (
         <Dialog
           title="Not saved"
@@ -301,6 +397,7 @@ export function DayRecord({ date }: { date: string }) {
           </div>
         </Dialog>
       ) : null}
+      </Presence>
     </section>
   );
 }

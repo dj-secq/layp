@@ -371,6 +371,7 @@ function TimeGrid({
                     <div
                       key={task.id}
                       className="cal-block"
+                      data-dragging={preview?.id === task.id ? "true" : undefined}
                       style={{
                         top: (minutes / 60) * HOUR,
                         height: Math.max(16, (duration / 60) * HOUR),

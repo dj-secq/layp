@@ -1,6 +1,7 @@
 import { Bell } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "../components/Button";
+import { Collapse } from "../components/Collapse";
 import { Field } from "../components/Field";
 import {
   addChecklistReminder,
@@ -51,7 +52,7 @@ export function ChecklistRows({
           const reminder = reminders.find((row) => row.lineText === line.text);
           const open = openText === line.text;
           return (
-            <li key={line.index} className="grid gap-2">
+            <li key={line.index} className="grid">
               <div className="flex items-center gap-2">
                 <button
                   type="button"
@@ -73,7 +74,7 @@ export function ChecklistRows({
                   {reminder ? reminderLabel(reminder.minutesBefore) : "Remind"}
                 </Button>
               </div>
-              {open ? (
+              <Collapse open={open} className="collapse-gap">
                 <ReminderForm
                   taskId={taskId}
                   notes={notes}
@@ -86,7 +87,7 @@ export function ChecklistRows({
                     app.bump();
                   }}
                 />
-              ) : null}
+              </Collapse>
             </li>
           );
         })}

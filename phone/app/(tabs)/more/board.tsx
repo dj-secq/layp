@@ -1,5 +1,7 @@
 import { Field } from "@/components/field";
 import { Choice } from "@/components/choice";
+import { HeaderAdd } from "@/components/header-add";
+import { HeaderSearch } from "@/components/header-search";
 import { PrimaryButton } from "@/components/primary-button";
 import {
   boardColumns,
@@ -17,20 +19,22 @@ import {
 import { createSection, deleteSection, renameSection, reorderSections } from "@/db/lists";
 import { applyBoardDrop, loadBoard, type BoardFile, type BoardSnapshot } from "@/db/tasks";
 import { usePhone } from "@/state/phone";
-import { colors } from "@/theme/colors";
+import { colors, onPrimary, primary } from "@/theme/colors";
+import { usePaper } from "@/theme/theme";
 import { movedIds, type Section, type Task } from "@layp/shared";
 import { Link, Redirect, Stack } from "expo-router";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Pressable, ScrollView, Text, useColorScheme, useWindowDimensions, View } from "react-native";
+import { Pressable, ScrollView, Text, useColorScheme, View } from "react-native";
 
 const PRIORITY_WORD = { high: "High", medium: "Medium", low: "Low" } as const;
+let rememberedListId: string | null = null;
 
 export default function BoardScreen() {
   useColorScheme();
+  usePaper();
   const phone = usePhone();
-  const { width } = useWindowDimensions();
-  const columnWidth = Math.min(320, Math.max(240, width - 64));
-  const [listId, setListId] = useState<string | null>(null);
+  const [listId, setListId] = useState<string | null>(rememberedListId);
+  const [columnId, setColumnId] = useState<string | null>(null);
   const [data, setData] = useState<BoardSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -63,7 +67,10 @@ export default function BoardScreen() {
       (next) => {
         if (cancel) return;
         setData(next);
-        if (next.list && next.list.id !== requested) setListId(next.list.id);
+        if (next.list && next.list.id !== requested) {
+          rememberedListId = next.list.id;
+          setListId(next.list.id);
+        }
         setError(null);
       },
       () => {
@@ -86,7 +93,9 @@ export default function BoardScreen() {
   const list = data?.list ?? null;
 
   function chooseList(id: string) {
+    rememberedListId = id;
     setListId(id);
+    setColumnId(null);
     setRenamingId(null);
     setDeletingId(null);
     setMovingId(null);
@@ -210,6 +219,8 @@ export default function BoardScreen() {
       style={{ flex: 1, backgroundColor: colors.background }}
     >
       <Stack.Title>Board</Stack.Title>
+      <HeaderSearch />
+      <HeaderAdd />
       {data === null && !error ? <Text style={{ color: colors.label }}>Loading the board…</Text> : null}
       {error && data === null ? (
         <View style={{ gap: 12 }}>
@@ -232,21 +243,27 @@ export default function BoardScreen() {
       {message ? <Text selectable style={{ color: colors.label }}>{message}</Text> : null}
       {error && data ? <Text selectable style={{ color: colors.label }}>{error}</Text> : null}
       {list ? (
-        <ScrollView
-          horizontal
-          nestedScrollEnabled
-          keyboardShouldPersistTaps="handled"
-          showsHorizontalScrollIndicator
-          style={{ flexGrow: 0 }}
-          contentContainerStyle={{ gap: 12, alignItems: "flex-start" }}
-        >
-          {openColumns.map((column) => {
+        <View style={{ gap: 12 }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, alignItems: "center" }}>
+            {openColumns.map((column) => (
+              <Chip key={column.id} label={column.name} selected={(columnId ?? columns[0]?.id) === column.id} onPress={() => setColumnId(column.id)} />
+            ))}
+            <Chip label="Add section" selected={columnId === "add"} onPress={() => setColumnId("add")} />
+            {done ? <Chip label={done.name} selected={(columnId ?? columns[0]?.id) === done.id} onPress={() => setColumnId(done.id)} /> : null}
+          </ScrollView>
+          {columnId === "add" ? (
+            <View style={{ gap: 8 }}>
+              <Field label="New section" value={sectionName} onChangeText={setSectionName} maxLength={80} />
+              <PrimaryButton label="Add section" disabled={pending} onPress={() => void addSection()} />
+            </View>
+          ) : null}
+          {(() => {
+            const column = columns.find((item) => item.id === (columnId ?? columns[0]?.id));
+            if (!column || columnId === "add") return null;
             const section = sections.find((item) => item.id === column.id) ?? null;
             return (
               <ColumnView
-                key={column.id}
                 name={column.name}
-                width={columnWidth}
                 section={section}
                 sections={sections}
                 renaming={section !== null && renamingId === section.id}
@@ -294,48 +311,41 @@ export default function BoardScreen() {
                     onUp={() => moveCard(task, -1)}
                     onDown={() => moveCard(task, 1)}
                     onToggleMove={() => setMovingId((current) => (current === task.id ? null : task.id))}
-                    onMoveTo={(columnId) => moveCardTo(task, columnId)}
+                    onMoveTo={(target) => moveCardTo(task, target)}
                   />
                 ))}
               </ColumnView>
             );
-          })}
-          <View style={{ width: columnWidth, gap: 8 }}>
-            <Field label="New section" value={sectionName} onChangeText={setSectionName} maxLength={80} />
-            <PrimaryButton label="Add section" disabled={pending} onPress={() => void addSection()} />
-          </View>
-          {done ? (
-            <ColumnView name={done.name} width={columnWidth} section={null} sections={sections} pending={pending}>
-              {done.tasks.map((task, index) => (
-                <CardView
-                  key={task.id}
-                  task={task}
-                  listColor={list.color}
-                  clock={data?.clock ?? "12"}
-                  tags={tagsOnCard(task.id, data?.links ?? [], data?.tags ?? [])}
-                  files={(data?.files ?? []).filter((file) => file.taskId === task.id)}
-                  destinations={moveDestinations(task, columns)}
-                  atStart={index === 0}
-                  atEnd={index === done.tasks.length - 1}
-                  moving={movingId === task.id}
-                  pending={pending}
-                  onUp={() => moveCard(task, -1)}
-                  onDown={() => moveCard(task, 1)}
-                  onToggleMove={() => setMovingId((current) => (current === task.id ? null : task.id))}
-                  onMoveTo={(columnId) => moveCardTo(task, columnId)}
-                />
-              ))}
-            </ColumnView>
-          ) : null}
-        </ScrollView>
+          })()}
+        </View>
       ) : null}
     </ScrollView>
   );
 }
 
+function Chip({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
+  useColorScheme();
+  usePaper();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      onPress={onPress}
+      style={{
+        minHeight: 40,
+        justifyContent: "center",
+        paddingHorizontal: 12,
+        borderRadius: 8,
+        backgroundColor: selected ? primary : colors.grouped,
+      }}
+    >
+      <Text style={{ color: selected ? onPrimary : colors.label, fontSize: 16 }}>{label}</Text>
+    </Pressable>
+  );
+}
+
 function ColumnView({
   name,
-  width,
   section,
   sections,
   renaming = false,
@@ -353,7 +363,6 @@ function ColumnView({
   children,
 }: {
   name: string;
-  width: number;
   section: Section | null;
   sections: Section[];
   renaming?: boolean;
@@ -371,6 +380,7 @@ function ColumnView({
   children: ReactNode;
 }) {
   useColorScheme();
+  usePaper();
   const index = section ? sections.findIndex((item) => item.id === section.id) : -1;
   const last = sections.length < 2;
   const plan = section ? sectionDeletePlan(sections, section.id) : null;
@@ -379,7 +389,6 @@ function ColumnView({
   return (
     <View
       style={{
-        width,
         gap: 10,
         backgroundColor: colors.grouped,
         borderRadius: 16,
@@ -468,6 +477,7 @@ function CardView({
   onMoveTo: (columnId: string) => void;
 }) {
   useColorScheme();
+  usePaper();
   const facts = cardFacts(task, tags, clock);
   return (
     <View style={{ gap: 8, backgroundColor: colors.background, borderRadius: 12, borderCurve: "continuous", padding: 10 }}>
@@ -533,6 +543,7 @@ function TextButton({
   onPress: () => void;
 }) {
   useColorScheme();
+  usePaper();
   return (
     <Pressable
       accessibilityRole="button"
@@ -557,6 +568,7 @@ function TextButton({
 
 function Centered({ text }: { text: string }) {
   useColorScheme();
+  usePaper();
   return (
     <View style={{ flex: 1, backgroundColor: colors.background, padding: 20, justifyContent: "center" }}>
       <Text selectable style={{ color: colors.label, fontSize: 17 }}>{text}</Text>

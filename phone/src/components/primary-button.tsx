@@ -1,7 +1,9 @@
 import { Pressable, Text } from "react-native";
-import { ink, primary } from "../theme/colors";
+import { onPrimary, primary } from "../theme/colors";
+import { usePaper } from "../theme/theme";
 
 export function PrimaryButton({ label, disabled, onPress }: { label: string; disabled?: boolean; onPress: () => void }) {
+  usePaper();
   return (
     <Pressable
       accessibilityRole="button"
@@ -16,7 +18,7 @@ export function PrimaryButton({ label, disabled, onPress }: { label: string; dis
         opacity: disabled ? 0.6 : 1,
       }}
     >
-      <Text style={{ color: ink, fontSize: 17, fontWeight: "600" }}>{label}</Text>
+      <Text style={{ color: onPrimary, fontSize: 17, fontWeight: "600" }}>{label}</Text>
     </Pressable>
   );
 }

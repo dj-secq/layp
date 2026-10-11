@@ -3,6 +3,7 @@ import { Temporal } from "temporal-polyfill";
 import { Button } from "../components/Button";
 import { Skeleton, useViewLoad } from "../components/Skeleton";
 import { Dialog } from "../components/Dialog";
+import { Presence } from "../lib/motion";
 import { Field } from "../components/Field";
 import {
   archiveTracker,
@@ -228,17 +229,19 @@ function HobbyDetail({ hobby, onDeleted }: { hobby: Tracker; onDeleted: () => vo
           Delete
         </Button>
       </div>
-      {confirm ? (
-        <DeleteHobby
-          hobby={hobby}
-          onClose={() => setConfirm(false)}
-          onDeleted={() => {
-            setConfirm(false);
-            onDeleted();
-            app.bump();
-          }}
-        />
-      ) : null}
+      <Presence open={confirm}>
+        {confirm ? (
+          <DeleteHobby
+            hobby={hobby}
+            onClose={() => setConfirm(false)}
+            onDeleted={() => {
+              setConfirm(false);
+              onDeleted();
+              app.bump();
+            }}
+          />
+        ) : null}
+      </Presence>
     </section>
   );
 }

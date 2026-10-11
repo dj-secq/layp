@@ -1,6 +1,7 @@
 import { Link } from "expo-router";
 import { Pressable, Text, View } from "react-native";
-import { colors, ink, primary } from "../theme/colors";
+import { colors, onPrimary, primary } from "../theme/colors";
+import { usePaper } from "../theme/theme";
 
 type RowTask = {
   id: string;
@@ -10,15 +11,29 @@ type RowTask = {
   tagNames?: string[];
 };
 
-export function TaskRow({ task, detail, onComplete }: { task: RowTask; detail?: string; onComplete: (id: string) => void }) {
+export function TaskRow({
+  task,
+  detail,
+  onComplete,
+  canReopen = false,
+  checkable = true,
+}: {
+  task: RowTask;
+  detail?: string;
+  onComplete: (id: string) => void;
+  canReopen?: boolean;
+  checkable?: boolean;
+}) {
+  usePaper();
   const done = task.completedAt !== null;
+  const locked = !checkable || (done && !canReopen);
   const line = detail ?? [task.sectionName, ...(task.tagNames ?? [])].filter((part) => part && part.length > 0).join(" · ");
   return (
     <View style={{ flexDirection: "row", gap: 12, alignItems: "flex-start", paddingVertical: 10 }}>
       <Pressable
         accessibilityRole="checkbox"
         accessibilityState={{ checked: done }}
-        disabled={done}
+        disabled={locked}
         onPress={() => onComplete(task.id)}
         style={{
           width: 28,
@@ -32,7 +47,7 @@ export function TaskRow({ task, detail, onComplete }: { task: RowTask; detail?: 
           justifyContent: "center",
         }}
       >
-        {done ? <Text style={{ color: ink, fontSize: 16 }}>✓</Text> : null}
+        {done ? <Text style={{ color: onPrimary, fontSize: 16 }}>✓</Text> : null}
       </Pressable>
       <Link href={{ pathname: "/task/[id]", params: { id: task.id } }} asChild>
         <Pressable style={{ flex: 1, gap: 2 }}>

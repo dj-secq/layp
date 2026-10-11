@@ -12,6 +12,8 @@ import { formatClock, type ClockPreference } from "@layp/shared";
 import { formatShortDay } from "@layp/shared";
 import { movedIds, sortTasks } from "@layp/shared";
 import { compareSections, sectionDeletePlan } from "../lib/sections";
+import { clearDragging, clearDrop, enterDrop, leaveDrop, markDragging } from "../lib/drag";
+import { Presence } from "../lib/motion";
 import { useApp } from "../state/AppState";
 
 export type BoardColumnModel = { id: string; name: string; tasks: Task[] };
@@ -366,9 +368,12 @@ export function BoardColumn({
 
   return (
     <section
-      className="panel flex max-h-[calc(100vh-10rem)] w-64 shrink-0 flex-col gap-2"
+      className="panel board-column flex max-h-[calc(100vh-10rem)] w-64 shrink-0 flex-col gap-2"
+      onDragEnter={enterDrop}
+      onDragLeave={leaveDrop}
       onDragOver={(event) => event.preventDefault()}
       onDrop={(event) => {
+        clearDrop(event);
         event.preventDefault();
         const taskId = event.dataTransfer.getData("text/plain");
         if (taskId) onDrop(taskId, null);
@@ -438,18 +443,20 @@ export function BoardColumn({
         </div>
       ) : null}
       {error ? <p className="meta text-danger">{error}</p> : null}
-      {section && deleting && target ? (
-        <DeleteSectionDialog
-          section={section}
-          targetName={target.name}
-          onClose={() => setDeleting(false)}
-          onDeleted={async () => {
-            setDeleting(false);
-            await app.refreshLists();
-            app.bump();
-          }}
-        />
-      ) : null}
+      <Presence open={Boolean(section && deleting && target)}>
+        {section && deleting && target ? (
+          <DeleteSectionDialog
+            section={section}
+            targetName={target.name}
+            onClose={() => setDeleting(false)}
+            onDeleted={async () => {
+              setDeleting(false);
+              await app.refreshLists();
+              app.bump();
+            }}
+          />
+        ) : null}
+      </Presence>
       <div className="grid min-h-0 gap-2 overflow-y-auto">
         {column.tasks.map((task) => (
           <BoardCard
@@ -495,13 +502,27 @@ export function BoardCard({
     <button
       type="button"
       draggable
-      className="press btn-secondary w-full items-start justify-start gap-2 text-left"
-      onDragStart={(event) => event.dataTransfer.setData("text/plain", task.id)}
+      className="press board-card btn-secondary w-full items-start justify-start gap-2 text-left"
+      onDragStart={(event) => {
+        event.dataTransfer.setData("text/plain", task.id);
+        event.dataTransfer.effectAllowed = "move";
+        markDragging(event);
+      }}
+      onDragEnd={clearDragging}
+      onDragEnter={(event) => {
+        enterDrop(event);
+        event.stopPropagation();
+      }}
+      onDragLeave={(event) => {
+        leaveDrop(event);
+        event.stopPropagation();
+      }}
       onDragOver={(event) => {
         event.preventDefault();
         event.stopPropagation();
       }}
       onDrop={(event) => {
+        clearDrop(event);
         event.preventDefault();
         event.stopPropagation();
         const taskId = event.dataTransfer.getData("text/plain");

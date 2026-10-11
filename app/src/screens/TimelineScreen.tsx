@@ -1,4 +1,4 @@
-import { useEffect, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { Temporal } from "temporal-polyfill";
 import { patchTask, tasksForTimeline } from "../db/tasks";
 import type { Task } from "../db/types";
@@ -52,21 +52,33 @@ export function TimelineScreen() {
 
   function drag(task: Task, event: ReactPointerEvent<HTMLButtonElement>) {
     if (event.button !== 0) return;
+    const bar = event.currentTarget;
     const originX = event.clientX;
     const originY = event.clientY;
     let moved = false;
     const move = (pointer: PointerEvent) => {
-      if (Math.abs(pointer.clientX - originX) > 6 || Math.abs(pointer.clientY - originY) > 6) moved = true;
+      const dx = pointer.clientX - originX;
+      if (!moved && Math.abs(dx) <= 6 && Math.abs(pointer.clientY - originY) <= 6) return;
+      moved = true;
+      bar.dataset.dragging = "true";
+      bar.style.transform = `translateX(${dx}px)`;
     };
     const up = (pointer: PointerEvent) => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      const delta = Math.round((pointer.clientX - originX) / DAY);
       if (!moved) {
+        delete bar.dataset.dragging;
+        bar.style.transform = "";
         app.setOpenTaskId(task.id);
         return;
       }
-      const delta = Math.round((pointer.clientX - originX) / DAY);
-      if (delta === 0) return;
+      if (delta === 0) {
+        delete bar.dataset.dragging;
+        bar.style.transform = "";
+        return;
+      }
+      bar.style.transform = `translateX(${delta * DAY}px)`;
       const patch: { startOn?: string; dueOn?: string } = {};
       if (task.startOn && task.dueOn) {
         patch.startOn = addDays(task.startOn, delta);
@@ -75,7 +87,11 @@ export function TimelineScreen() {
       else if (task.startOn) patch.startOn = addDays(task.startOn, delta);
       void patchTask(task, patch).then((result) => {
         if (result.status === "saved") app.bump();
-        else setError("Not saved");
+        else {
+          delete bar.dataset.dragging;
+          bar.style.transform = "";
+          setError("Not saved");
+        }
       });
     };
     window.addEventListener("pointermove", move);
@@ -166,9 +182,16 @@ function TimelineBar({
   onDrag: (task: Task, event: ReactPointerEvent<HTMLButtonElement>) => void;
   onOpen: () => void;
 }) {
+  const barRef = useRef<HTMLButtonElement>(null);
   const task = row.task;
   const start = task.startOn && task.dueOn ? task.startOn : (task.dueOn ?? task.startOn ?? days[0]);
   const endDay = task.startOn && task.dueOn ? task.dueOn : start;
+  useLayoutEffect(() => {
+    const bar = barRef.current;
+    if (!bar?.dataset.dragging) return;
+    bar.style.transform = "";
+    delete bar.dataset.dragging;
+  }, [start, endDay]);
   const startIndex = Math.max(0, indexOf(start));
   const endIndex = Math.min(days.length - 1, indexOf(endDay));
   const left = GUTTER + startIndex * DAY;
@@ -182,6 +205,7 @@ function TimelineBar({
       {row.bar ? (
         <button
           type="button"
+          ref={barRef}
           className="timeline-item absolute top-0"
           data-mark={mark ? "true" : "false"}
           style={{

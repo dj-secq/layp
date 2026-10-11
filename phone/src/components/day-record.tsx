@@ -7,16 +7,43 @@ import {
   suggestedSleepHours,
   type ClockPreference,
   type Day,
+  type SleepTimes,
 } from "@layp/shared";
 import { useEffect, useRef, useState } from "react";
 import { Pressable, Text, View, useColorScheme } from "react-native";
+import { usePaper } from "../theme/theme";
 import { DIARY_PAUSE_MS, emptyDay, loadDay, saveDay } from "../db/days";
 import { loadClock } from "../db/settings";
-import { colors, ink, primary } from "../theme/colors";
+import { colors, ink, onPrimary, primary } from "../theme/colors";
 import { Field } from "./field";
+import { SleepNow } from "./sleep-now";
 
-export function DayRecord({ date, onSaved }: { date: string; onSaved: () => void }) {
+function newerThan(current: Day | null, row: Day | null, date: string): boolean {
+  if (!current || current.day !== date || !current.updatedAt) return false;
+  if (!row) return true;
+  return current.updatedAt > row.updatedAt;
+}
+
+export type SleepBridge = {
+  focused: () => boolean;
+  snapshot: () => SleepTimes | null;
+  /** Show a row that was just saved, without writing it again. */
+  applySaved: (row: Day) => void;
+  clearBed: () => void;
+};
+
+export function DayRecord({
+  date,
+  onSaved,
+  revision,
+}: {
+  date: string;
+  onSaved: () => void;
+  revision: number;
+}) {
   useColorScheme();
+  usePaper();
+  const bridge = useRef<SleepBridge | null>(null);
   const [record, setRecord] = useState<Day | null>(null);
   const [clock, setClock] = useState<ClockPreference>("12");
   const [sleepText, setSleepText] = useState("");
@@ -32,6 +59,11 @@ export function DayRecord({ date, onSaved }: { date: string; onSaved: () => void
   const draft = useRef<Day | null>(null);
   const chain = useRef(Promise.resolve());
   const hydrated = useRef(false);
+  const sleepFocused = useRef(false);
+  const diaryRef = useRef(diary);
+  const noteRef = useRef(note);
+  diaryRef.current = diary;
+  noteRef.current = note;
 
   function adopt(next: Day, preference: ClockPreference) {
     draft.current = next;
@@ -55,6 +87,10 @@ export function DayRecord({ date, onSaved }: { date: string; onSaved: () => void
     void Promise.all([loadDay(date), loadClock()])
       .then(([row, preference]) => {
         if (cancel) return;
+        if (newerThan(draft.current, row, date)) {
+          hydrated.current = true;
+          return;
+        }
         adopt(row ?? emptyDay(date), preference);
         hydrated.current = true;
       })
@@ -114,6 +150,60 @@ export function DayRecord({ date, onSaved }: { date: string; onSaved: () => void
   }
 
   useEffect(() => {
+    bridge.current = {
+      focused: () => sleepFocused.current,
+      snapshot() {
+        const current = draft.current;
+        if (!current || current.day !== date) return null;
+        return {
+          day: current.day,
+          sleepBed: current.sleepBed,
+          sleepWake: current.sleepWake,
+          sleepHours: current.sleepHours,
+        };
+      },
+      applySaved(row) {
+        const current = draft.current;
+        if (!current || current.day !== row.day) return;
+        const sameSleep =
+          current.sleepBed === row.sleepBed && current.sleepWake === row.sleepWake && current.sleepHours === row.sleepHours;
+        const dirty =
+          sleepFocused.current || diaryRef.current !== current.diary || noteRef.current !== current.workoutNote;
+        if (sameSleep && (dirty || current.updatedAt === row.updatedAt)) return;
+        if (!dirty) {
+          adopt(row, clock);
+          return;
+        }
+        if (sleepFocused.current) return;
+        const next = {
+          ...current,
+          sleepBed: row.sleepBed,
+          sleepWake: row.sleepWake,
+          sleepHours: row.sleepHours,
+          updatedAt: row.updatedAt,
+        };
+        draft.current = next;
+        setRecord(next);
+        setSleepError(null);
+        setSleepText(row.sleepHours === null ? "" : String(row.sleepHours));
+        setBedText(row.sleepBed ? formatClock(row.sleepBed, clock) : "");
+        setWakeText(row.sleepWake ? formatClock(row.sleepWake, clock) : "");
+      },
+      clearBed() {
+        const current = draft.current;
+        if (!current || current.day !== date || current.sleepWake) return;
+        const next = { ...current, sleepBed: null };
+        draft.current = next;
+        setRecord(next);
+        setBedText("");
+      },
+    };
+    return () => {
+      bridge.current = null;
+    };
+  });
+
+  useEffect(() => {
     if (!hydrated.current || draft.current?.day !== date) return;
     if (diary === draft.current.diary) return;
     const handle = setTimeout(() => {
@@ -141,15 +231,20 @@ export function DayRecord({ date, onSaved }: { date: string; onSaved: () => void
     <View style={{ gap: 16 }}>
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" }}>
         <Text style={{ color: colors.label, fontSize: 22, fontWeight: "600" }}>Day</Text>
-        <Text style={{ color: ink, fontSize: 15 }}>{notSaved ? "Not saved" : ""}</Text>
+        <Text style={{ color: colors.danger, fontSize: 15 }}>{notSaved ? "Not saved" : ""}</Text>
       </View>
+      <SleepNow clock={clock} viewedDay={date} bridge={bridge} revision={revision} onSaved={onSaved} />
       <Field
         label="Sleep hours"
         value={sleepText}
         keyboardType="decimal-pad"
         placeholder="Hours"
         onChangeText={setSleepText}
+        onFocus={() => {
+          sleepFocused.current = true;
+        }}
         onBlur={() => {
+          sleepFocused.current = false;
           const parsed = cleanSleep(sleepText);
           if ("error" in parsed) {
             setSleepError(parsed.error);
@@ -161,14 +256,20 @@ export function DayRecord({ date, onSaved }: { date: string; onSaved: () => void
           if (parsed.hours !== draft.current?.sleepHours) apply({ sleepHours: parsed.hours });
         }}
       />
-      {sleepError ? <Text style={{ color: ink }}>{sleepError}</Text> : null}
+      {sleepError ? <Text style={{ color: colors.danger }}>{sleepError}</Text> : null}
       <Field
         label="Bed"
         value={bedText}
         placeholder={clock === "12" ? "11:30 PM" : "23:30"}
         autoCapitalize="characters"
         onChangeText={setBedText}
-        onBlur={() => commitTime(bedText, "sleepBed", setBedText)}
+        onFocus={() => {
+          sleepFocused.current = true;
+        }}
+        onBlur={() => {
+          sleepFocused.current = false;
+          commitTime(bedText, "sleepBed", setBedText);
+        }}
       />
       <Field
         label="Wake"
@@ -176,7 +277,13 @@ export function DayRecord({ date, onSaved }: { date: string; onSaved: () => void
         placeholder={clock === "12" ? "7:00 AM" : "07:00"}
         autoCapitalize="characters"
         onChangeText={setWakeText}
-        onBlur={() => commitTime(wakeText, "sleepWake", setWakeText)}
+        onFocus={() => {
+          sleepFocused.current = true;
+        }}
+        onBlur={() => {
+          sleepFocused.current = false;
+          commitTime(wakeText, "sleepWake", setWakeText);
+        }}
       />
       {suggestion !== null ? (
         <View style={{ gap: 8, backgroundColor: colors.grouped, borderRadius: 16, borderCurve: "continuous", padding: 12 }}>
@@ -270,7 +377,7 @@ export function DayRecord({ date, onSaved }: { date: string; onSaved: () => void
             }}
             style={{ backgroundColor: primary, borderRadius: 14, borderCurve: "continuous", paddingVertical: 12, alignItems: "center" }}
           >
-            <Text style={{ color: ink, fontSize: 17, fontWeight: "600" }}>Keep mine</Text>
+            <Text style={{ color: onPrimary, fontSize: 17, fontWeight: "600" }}>Keep mine</Text>
           </Pressable>
           <Pressable accessibilityRole="button" onPress={() => adopt(conflict, clock)}>
             <Text style={{ color: colors.label, fontSize: 17 }}>Use saved</Text>
@@ -293,6 +400,7 @@ function ChoiceLine({
   onChange: (value: string) => void;
 }) {
   useColorScheme();
+  usePaper();
   return (
     <View style={{ gap: 6 }}>
       <Text style={{ color: colors.secondaryLabel, fontSize: 13 }}>{label}</Text>
@@ -313,7 +421,7 @@ function ChoiceLine({
                 paddingVertical: 8,
               }}
             >
-              <Text style={{ color: selected ? ink : colors.label, fontSize: 16 }}>{option.label}</Text>
+              <Text style={{ color: selected ? onPrimary : colors.label, fontSize: 16 }}>{option.label}</Text>
             </Pressable>
           );
         })}

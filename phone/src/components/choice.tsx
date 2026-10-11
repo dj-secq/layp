@@ -1,5 +1,6 @@
 import { Pressable, Text, View, useColorScheme } from "react-native";
-import { colors, ink, primary } from "../theme/colors";
+import { usePaper } from "../theme/theme";
+import { colors, onPrimary, primary } from "../theme/colors";
 
 export function Choice({
   label,
@@ -15,6 +16,7 @@ export function Choice({
   disabled?: boolean;
 }) {
   useColorScheme();
+  usePaper();
   return (
     <View style={{ gap: 6 }}>
       <Text style={{ color: colors.secondaryLabel, fontSize: 13 }}>{label}</Text>
@@ -37,7 +39,7 @@ export function Choice({
                 opacity: disabled ? 0.5 : 1,
               }}
             >
-              <Text style={{ color: selected ? ink : colors.label, fontSize: 16 }}>{option.label}</Text>
+              <Text style={{ color: selected ? onPrimary : colors.label, fontSize: 16 }}>{option.label}</Text>
             </Pressable>
           );
         })}

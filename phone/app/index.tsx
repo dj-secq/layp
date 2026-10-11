@@ -1,12 +1,14 @@
 import { usePhone } from "@/state/phone";
 import { loadSession } from "@/link/store";
-import { colors, ink, primary } from "@/theme/colors";
+import { colors, onPrimary, primary } from "@/theme/colors";
+import { usePaper } from "@/theme/theme";
 import { Redirect, Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, useColorScheme, View } from "react-native";
 
 export default function PairScreen() {
   useColorScheme();
+  usePaper();
   const phone = usePhone();
   const router = useRouter();
   const params = useLocalSearchParams<{ address?: string | string[] }>();
@@ -22,6 +24,7 @@ export default function PairScreen() {
 
 function PairForm() {
   useColorScheme();
+  usePaper();
   const phone = usePhone();
   const router = useRouter();
   const [code, setCode] = useState("");
@@ -62,6 +65,7 @@ function PairForm() {
 
 function AddressForm({ onDone }: { onDone: () => void }) {
   useColorScheme();
+  usePaper();
   const phone = usePhone();
   const [host, setHost] = useState("");
   const [port, setPort] = useState("");
@@ -125,6 +129,7 @@ function Field({
   keyboardType?: "default" | "number-pad" | "numbers-and-punctuation";
 }) {
   useColorScheme();
+  usePaper();
   return (
     <View style={{ gap: 6 }}>
       <Text style={{ color: colors.secondaryLabel, fontSize: 13 }}>{label}</Text>
@@ -163,13 +168,14 @@ function PrimaryButton({ label, disabled, onPress }: { label: string; disabled: 
         opacity: disabled ? 0.6 : 1,
       }}
     >
-      <Text style={{ color: ink, fontSize: 17, fontWeight: "600" }}>{label}</Text>
+      <Text style={{ color: onPrimary, fontSize: 17, fontWeight: "600" }}>{label}</Text>
     </Pressable>
   );
 }
 
 function Message({ text }: { text: string }) {
   useColorScheme();
+  usePaper();
   return (
     <View style={{ flex: 1, backgroundColor: colors.background, padding: 20, justifyContent: "center" }}>
       <Text selectable style={{ color: colors.label, fontSize: 17 }}>{text}</Text>

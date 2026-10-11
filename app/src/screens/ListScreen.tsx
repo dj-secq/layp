@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "../components/Button";
 import { Skeleton, useViewLoad } from "../components/Skeleton";
 import { Choice } from "../components/Choice";
+import { Collapse } from "../components/Collapse";
 import { Dialog } from "../components/Dialog";
+import { Presence } from "../lib/motion";
 import { TaskRow } from "../components/TaskRow";
 import { createSection, deleteSection, firstSectionId, renameSection, reorderSections } from "../db/lists";
 import { completeTask, createTask, reopenTask, rewriteOrder, tasksForList } from "../db/tasks";
@@ -173,11 +175,11 @@ export function ListScreen({ listId }: { listId: string }) {
             <span>Completed {completed.length}</span>
             <span>{completedOpen ? "Hide" : "Show"}</span>
           </button>
-          {completedOpen
-            ? completed.map((task) => (
-                <Row key={task.id} task={task} done onToggle={toggle} />
-              ))
-            : null}
+          <Collapse open={completedOpen}>
+            {completed.map((task) => (
+              <Row key={task.id} task={task} done onToggle={toggle} />
+            ))}
+          </Collapse>
         </div>
       ) : null}
     </div>
@@ -325,18 +327,20 @@ export function SectionBlock({
         </div>
       ) : null}
       {error ? <p className="meta text-danger">{error}</p> : null}
-      {deleting && target ? (
-        <DeleteSectionDialog
-          section={section}
-          targetName={target.name}
-          onClose={() => setDeleting(false)}
-          onDeleted={async () => {
-            setDeleting(false);
-            await app.refreshLists();
-            app.bump();
-          }}
-        />
-      ) : null}
+      <Presence open={Boolean(deleting && target)}>
+        {deleting && target ? (
+          <DeleteSectionDialog
+            section={section}
+            targetName={target.name}
+            onClose={() => setDeleting(false)}
+            onDeleted={async () => {
+              setDeleting(false);
+              await app.refreshLists();
+              app.bump();
+            }}
+          />
+        ) : null}
+      </Presence>
       {tasks.map((task) => (
         <div key={task.id} className="flex items-center gap-1">
           <div className="min-w-0 flex-1">

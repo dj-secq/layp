@@ -1,28 +1,46 @@
 import { refreshReminders, startReminders } from "@/notify";
 import { PhoneProvider, usePhone } from "@/state/phone";
-import { DarkTheme, DefaultTheme, ThemeProvider } from "expo-router";
+import { screenChrome } from "@/theme/chrome";
+import { useLaypFonts } from "@/theme/fonts";
+import { PaperProvider, usePaper } from "@/theme/theme";
 import { Stack } from "expo-router/stack";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
-import { AppState, useColorScheme } from "react-native";
+import { AppState } from "react-native";
 
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
+  const fonts = useLaypFonts();
+  if (!fonts) return null;
   return (
-    <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-      <PhoneProvider>
+    <PhoneProvider>
+      <PaperProvider>
         <ReminderRefresh />
-        <Stack screenOptions={{ headerShadowVisible: false }}>
-          <Stack.Screen name="index" options={{ title: "Layp" }} />
-          <Stack.Screen name="today" options={{ title: "Today" }} />
-          <Stack.Screen name="inbox" options={{ title: "Inbox" }} />
-          <Stack.Screen name="board" options={{ title: "Board" }} />
-          <Stack.Screen name="task/[id]" options={{ title: "Task" }} />
-        </Stack>
-      </PhoneProvider>
-    </ThemeProvider>
+        <RootStack />
+      </PaperProvider>
+    </PhoneProvider>
+  );
+}
+
+function RootStack() {
+  const paper = usePaper();
+  return (
+    <Stack screenOptions={screenChrome(paper)}>
+      <Stack.Screen name="index" options={{ title: "Layp" }} />
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="task/[id]" options={{ title: "Task" }} />
+      <Stack.Screen name="search" options={{ title: "Search" }} />
+      <Stack.Screen
+        name="add"
+        options={{
+          presentation: "formSheet",
+          title: "Add",
+          sheetGrabberVisible: true,
+          sheetAllowedDetents: [0.55, 1],
+        }}
+      />
+    </Stack>
   );
 }
 

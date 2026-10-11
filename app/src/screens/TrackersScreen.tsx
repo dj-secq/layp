@@ -2,6 +2,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Temporal } from "temporal-polyfill";
 import { Button } from "../components/Button";
+import { Collapse } from "../components/Collapse";
 import { Skeleton, useViewLoad } from "../components/Skeleton";
 import { Choice } from "../components/Choice";
 import { Field } from "../components/Field";
@@ -124,6 +125,7 @@ export function TrackersScreen() {
       {view.ready && active.length === 0 ? <p className="meta">Add a row to start a tracker.</p> : null}
       {view.ready ? active.map((tracker) => (
         <article key={tracker.id} className="panel grid gap-3">
+          <div>
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <h2 className="text-[18px] font-bold">
               {tracker.name}{" "}
@@ -152,26 +154,30 @@ export function TrackersScreen() {
               </Button>
             </div>
           </div>
-          {editingId === tracker.id ? (
-            <TrackerForm
-              key={tracker.updatedAt}
-              initial={{
-                name: tracker.name,
-                kind: tracker.kind,
-                unit: tracker.unit ?? "",
-                target: tracker.dailyTarget === null ? "" : String(tracker.dailyTarget),
-                schedule: tracker.schedule,
-                color: tracker.color,
-              }}
-              kindLocked={(logCounts.get(tracker.id) ?? 0) > 0}
-              submitLabel="Save"
-              framed={false}
-              onSubmit={(input) => updateTracker(tracker, input)}
-              onSaved={() => setEditingId(null)}
-              onCancel={() => setEditingId(null)}
-              onError={setError}
-            />
-          ) : null}
+          <Collapse open={editingId === tracker.id} className="collapse-gap-lg">
+            {editingId === tracker.id ? (
+              <TrackerForm
+                key={tracker.updatedAt}
+                initial={{
+                  name: tracker.name,
+                  kind: tracker.kind,
+                  unit: tracker.unit ?? "",
+                  target: tracker.dailyTarget === null ? "" : String(tracker.dailyTarget),
+                  schedule: tracker.schedule,
+                  color: tracker.color,
+                }}
+                kindLocked={(logCounts.get(tracker.id) ?? 0) > 0}
+                submitLabel="Save"
+                framed={false}
+                onSubmit={(input) => updateTracker(tracker, input)}
+                onSaved={() => setEditingId(null)}
+                onCancel={() => setEditingId(null)}
+                onError={setError}
+              />
+            ) : null}
+          </Collapse>
+          </div>
+          <div>
           <div className="tracker-grid">
             {weekdayLabels(app.settings.weekStart).map((label) => (
               <span key={label} className="meta text-center">
@@ -201,15 +207,18 @@ export function TrackersScreen() {
               ),
             )}
           </div>
-          {edit?.trackerId === tracker.id ? (
-            <LogEditor
-              tracker={tracker}
-              day={edit.day}
-              log={logs.find((item) => item.trackerId === tracker.id && item.day === edit.day)}
-              onClose={() => setEdit(null)}
-              onError={setError}
-            />
-          ) : null}
+          <Collapse open={edit?.trackerId === tracker.id} className="collapse-gap-lg">
+            {edit?.trackerId === tracker.id ? (
+              <LogEditor
+                tracker={tracker}
+                day={edit.day}
+                log={logs.find((item) => item.trackerId === tracker.id && item.day === edit.day)}
+                onClose={() => setEdit(null)}
+                onError={setError}
+              />
+            ) : null}
+          </Collapse>
+          </div>
         </article>
       )) : null}
       {view.ready && archived.length > 0 ? (

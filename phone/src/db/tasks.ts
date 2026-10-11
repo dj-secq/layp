@@ -1,6 +1,7 @@
 import {
   cleanNotes,
   cleanTitle,
+  parentCreatesCycle,
   parseRule,
   reconcileChecklistReminders,
   serializeRule,
@@ -20,7 +21,7 @@ import type { BoardDrop } from "./board";
 import { completeOn } from "./complete";
 import { withLock, withStamp } from "./lock";
 import { firstSectionId, inboxList, readLists, readSections } from "./lists";
-import { planQuickAdd } from "./quick";
+import { planQuickAdd, type QuickDefaults } from "./quick";
 import { readClock } from "./settings";
 import type { Run, SqlStatement } from "./sql";
 import { loadToday, type TodayTask } from "./today";
@@ -42,6 +43,7 @@ export type NewTask = {
   priority?: Priority;
   important?: boolean;
   recurrence?: RecurrenceRule | null;
+  parentId?: string | null;
 };
 
 export type TaskPatch = {
@@ -53,17 +55,40 @@ export type TaskPatch = {
   dueOn?: string | null;
   dueTime?: string | null;
   recurrence?: RecurrenceRule | null;
+  important?: boolean;
+  urgent?: boolean;
+  pinned?: boolean;
+  startOn?: string | null;
+  durationMinutes?: number | null;
+  estimatedPomos?: number | null;
 };
 
-const TASK_COLUMNS = `id, series_id, list_id, section_id, parent_id, title, notes, priority,
+export const TASK_COLUMNS = `id, series_id, list_id, section_id, parent_id, title, notes, priority,
   important, urgent, pinned, start_on, due_on, due_time, duration_minutes, recurrence_json,
   estimated_pomos, completed_pomos, sort_order, completed_at, deleted_at, created_at, updated_at`;
+
+export type TaskFile = { id: string; fileName: string; byteSize: number };
+export type EditorReminder = { id: string; minutesBefore: number };
+export type EditorChecklistReminder = {
+  id: string;
+  lineText: string;
+  dueOn: string;
+  dueTime: string | null;
+  minutesBefore: number;
+};
 
 export type TaskEditor = {
   task: Task | null;
   lists: TaskList[];
   sections: Section[];
   clock: "12" | "24";
+  tags: Tag[];
+  taskTags: Tag[];
+  reminders: EditorReminder[];
+  checklistReminders: EditorChecklistReminder[];
+  children: Task[];
+  files: TaskFile[];
+  childCount: number;
 };
 
 export type InboxSnapshot = {
@@ -143,9 +168,13 @@ export async function addInboxTitle(title: string): Promise<SaveResult<Task>> {
   }
 }
 
-export async function addQuick(text: string, now: { today: string; minutes: number | null }): Promise<QuickSave> {
+export async function addQuick(
+  text: string,
+  now: { today: string; minutes: number | null },
+  defaults?: QuickDefaults,
+): Promise<QuickSave> {
   try {
-    return await withStamp(async (stamp, run) => addQuickOn(run, text, now, stamp, () => randomUUID()));
+    return await withStamp(async (stamp, run) => addQuickOn(run, text, now, stamp, () => randomUUID(), defaults));
   } catch {
     return { status: "error", message: "Not saved" };
   }
@@ -166,7 +195,66 @@ export async function loadTaskEditorOn(run: Run, id: string): Promise<TaskEditor
   const lists = await readLists(run);
   const sections = await readSections(run);
   const clock = await readClock(run);
-  return { task, lists, sections, clock };
+  const loaded = await run([
+    { sql: `SELECT id, name, color, created_at, updated_at FROM tags ORDER BY name COLLATE NOCASE ASC`, values: [] },
+    {
+      sql: `SELECT tags.id, tags.name, tags.color, tags.created_at, tags.updated_at
+            FROM tags JOIN task_tags ON task_tags.tag_id = tags.id
+            WHERE task_tags.task_id = $1
+            ORDER BY tags.name COLLATE NOCASE ASC`,
+      values: [id],
+    },
+    { sql: `SELECT id, minutes_before FROM reminders WHERE task_id = $1 ORDER BY minutes_before ASC, created_at ASC`, values: [id] },
+    {
+      sql: `SELECT id, line_text, due_on, due_time, minutes_before FROM checklist_reminders WHERE task_id = $1 ORDER BY created_at ASC`,
+      values: [id],
+    },
+    {
+      sql: `SELECT ${TASK_COLUMNS} FROM tasks WHERE parent_id = $1 AND deleted_at IS NULL ORDER BY sort_order ASC, created_at ASC`,
+      values: [id],
+    },
+    { sql: `SELECT id, file_name, byte_size FROM attachments WHERE task_id = $1 ORDER BY created_at ASC`, values: [id] },
+    { sql: `SELECT COUNT(*) AS n FROM tasks WHERE parent_id = $1 AND deleted_at IS NULL`, values: [id] },
+  ]);
+  const batch = loaded.batches;
+  return {
+    task,
+    lists,
+    sections,
+    clock,
+    tags: (batch[0]?.rows ?? []).flatMap((row) => {
+      const parsed = tagSchema.safeParse(row);
+      return parsed.success ? [parsed.data] : [];
+    }),
+    taskTags: (batch[1]?.rows ?? []).flatMap((row) => {
+      const parsed = tagSchema.safeParse(row);
+      return parsed.success ? [parsed.data] : [];
+    }),
+    reminders: (batch[2]?.rows ?? []).flatMap((row) =>
+      typeof row.id === "string" ? [{ id: row.id, minutesBefore: Number(row.minutes_before) }] : [],
+    ),
+    checklistReminders: (batch[3]?.rows ?? []).flatMap((row) =>
+      typeof row.id === "string" && typeof row.line_text === "string" && typeof row.due_on === "string"
+        ? [{
+            id: row.id,
+            lineText: row.line_text,
+            dueOn: row.due_on,
+            dueTime: typeof row.due_time === "string" ? row.due_time : null,
+            minutesBefore: Number(row.minutes_before),
+          }]
+        : [],
+    ),
+    children: (batch[4]?.rows ?? []).flatMap((row) => {
+      const parsed = taskSchema.safeParse(row);
+      return parsed.success ? [parsed.data] : [];
+    }),
+    files: (batch[5]?.rows ?? []).flatMap((row) =>
+      typeof row.id === "string" && typeof row.file_name === "string"
+        ? [{ id: row.id, fileName: row.file_name, byteSize: Number(row.byte_size) }]
+        : [],
+    ),
+    childCount: Number(batch[6]?.rows[0]?.n ?? 0),
+  };
 }
 
 export async function loadInboxOn(run: Run): Promise<InboxSnapshot> {
@@ -200,6 +288,13 @@ export async function createOn(run: Run, input: NewTask, stamp: string, id: stri
   const prepared = prepareNewTask(input);
   if ("error" in prepared) return { status: "error", message: prepared.error };
   const task = prepared.input;
+  if (task.parentId) {
+    const links = await run([{ sql: `SELECT id, parent_id FROM tasks WHERE deleted_at IS NULL`, values: [] }]);
+    const rows = (links.batches[0]?.rows ?? []).flatMap((row) =>
+      typeof row.id === "string" ? [{ id: row.id, parentId: typeof row.parent_id === "string" ? row.parent_id : null }] : [],
+    );
+    if (parentCreatesCycle(rows, id, task.parentId)) return { status: "error", message: "A task cannot contain itself." };
+  }
   const max = await run([
     { sql: `SELECT COALESCE(MAX(sort_order), 0) AS max_sort FROM tasks WHERE list_id = $1`, values: [task.listId] },
   ]);
@@ -212,7 +307,7 @@ export async function createOn(run: Run, input: NewTask, stamp: string, id: stri
          important, urgent, pinned, start_on, due_on, due_time, duration_minutes, recurrence_json,
          estimated_pomos, completed_pomos, sort_order, completed_at, deleted_at, created_at, updated_at
        ) VALUES (
-         $1, $1, $2, $3, NULL, $4, $5, $6,
+         $1, $1, $2, $3, $13, $4, $5, $6,
          $7, 0, 0, NULL, $8, $9, NULL, $10,
          NULL, 0, $11, NULL, NULL, $12, $12
        )`,
@@ -229,6 +324,7 @@ export async function createOn(run: Run, input: NewTask, stamp: string, id: stri
         recurrenceJson,
         sortOrder,
         stamp,
+        task.parentId ?? null,
       ],
     },
   ]);
@@ -239,7 +335,7 @@ export async function createOn(run: Run, input: NewTask, stamp: string, id: stri
       seriesId: id,
       listId: task.listId,
       sectionId: task.sectionId,
-      parentId: null,
+      parentId: task.parentId ?? null,
       title: task.title,
       notes: task.notes ?? "",
       priority: task.priority ?? "none",
@@ -268,10 +364,11 @@ export async function addQuickOn(
   now: { today: string; minutes: number | null },
   stamp: string,
   newId: () => string,
+  defaults?: QuickDefaults,
 ): Promise<QuickSave> {
   const lists = await readLists(run);
   const sections = await readSections(run);
-  const plan = planQuickAdd(text, lists, sections, now);
+  const plan = planQuickAdd(text, lists, sections, now, defaults);
   if (plan.status !== "ready") return plan;
   const saved = await createOn(run, plan.input, stamp, newId());
   if (saved.status !== "saved") return { status: "error", message: saved.status === "error" ? saved.message : "Not saved" };
@@ -302,6 +399,12 @@ export async function patchOn(
   if (nextPatch.priority !== undefined) add("priority", nextPatch.priority);
   if (nextPatch.dueOn !== undefined) add("due_on", nextPatch.dueOn);
   if (nextPatch.dueTime !== undefined) add("due_time", nextPatch.dueTime);
+  if (nextPatch.important !== undefined) add("important", nextPatch.important ? 1 : 0);
+  if (nextPatch.urgent !== undefined) add("urgent", nextPatch.urgent ? 1 : 0);
+  if (nextPatch.pinned !== undefined) add("pinned", nextPatch.pinned ? 1 : 0);
+  if (nextPatch.startOn !== undefined) add("start_on", nextPatch.startOn);
+  if (nextPatch.durationMinutes !== undefined) add("duration_minutes", nextPatch.durationMinutes);
+  if (nextPatch.estimatedPomos !== undefined) add("estimated_pomos", nextPatch.estimatedPomos);
   let recurrenceJson: string | null | undefined;
   if (nextPatch.recurrence !== undefined) {
     recurrenceJson = nextPatch.recurrence === null ? null : serializeRule(nextPatch.recurrence);
@@ -340,6 +443,12 @@ export async function patchOn(
       ...(nextPatch.priority !== undefined ? { priority: nextPatch.priority } : {}),
       ...(nextPatch.dueOn !== undefined ? { dueOn: nextPatch.dueOn } : {}),
       ...(nextPatch.dueTime !== undefined ? { dueTime: nextPatch.dueTime } : {}),
+      ...(nextPatch.important !== undefined ? { important: nextPatch.important } : {}),
+      ...(nextPatch.urgent !== undefined ? { urgent: nextPatch.urgent } : {}),
+      ...(nextPatch.pinned !== undefined ? { pinned: nextPatch.pinned } : {}),
+      ...(nextPatch.startOn !== undefined ? { startOn: nextPatch.startOn } : {}),
+      ...(nextPatch.durationMinutes !== undefined ? { durationMinutes: nextPatch.durationMinutes } : {}),
+      ...(nextPatch.estimatedPomos !== undefined ? { estimatedPomos: nextPatch.estimatedPomos } : {}),
       ...(recurrenceJson !== undefined ? { recurrenceJson } : {}),
       updatedAt: stamp,
     },
@@ -414,6 +523,16 @@ function preparePatch(task: Task, patch: TaskPatch): { patch: TaskPatch } | { er
   }
   if (patch.priority !== undefined && !["none", "low", "medium", "high"].includes(patch.priority)) {
     return { error: "Not saved" };
+  }
+  if (patch.durationMinutes !== undefined && patch.durationMinutes !== null) {
+    if (!Number.isInteger(patch.durationMinutes) || patch.durationMinutes < 5 || patch.durationMinutes > 1440) {
+      return { error: "Duration is 5 to 1440 minutes." };
+    }
+  }
+  if (patch.estimatedPomos !== undefined && patch.estimatedPomos !== null) {
+    if (!Number.isInteger(patch.estimatedPomos) || patch.estimatedPomos < 1 || patch.estimatedPomos > 99) {
+      return { error: "Estimated pomodoros can be 1 to 99." };
+    }
   }
   void task;
   return { patch: next };
@@ -523,6 +642,17 @@ export async function moveOnBoard(
           },
     ),
   );
+}
+
+/** One updated_at for the whole call, so a later sync can see the new order. */
+export async function rewriteOrder(ids: string[]): Promise<"saved" | "error"> {
+  if (ids.length === 0) return "saved";
+  try {
+    await withStamp((stamp, run) => rewriteOrderOn(run, ids, stamp));
+    return "saved";
+  } catch {
+    return "error";
+  }
 }
 
 export async function rewriteOrderOn(run: Run, ids: string[], stamp: string): Promise<void> {

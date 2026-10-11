@@ -3,7 +3,7 @@ import { Temporal } from "temporal-polyfill";
 import { sessionsBetween } from "../db/focus";
 import { completedInstants } from "../db/tasks";
 import { daysBetween, loadTrackers, logsBetween, type DaySnap, type Tracker, type TrackerLog } from "../db/trackers";
-import { averageSleep, isSuccess, sumMinutes, type TrackerKind } from "@layp/shared";
+import { averageSleep, isSuccess, sleepLine, sumMinutes, type TrackerKind } from "@layp/shared";
 import { civilDay, countsByDay, dayReading, daysAround, sumByDay, trackerRate, trackerTone, type DayReading, type TrackerTone } from "@layp/shared";
 import { formatHours } from "@layp/shared";
 import { MOOD_COLORS } from "@layp/shared";
@@ -43,6 +43,7 @@ type Board = {
   rows: BoardRow[];
   tasks: number[];
   focus: number[];
+  sleep: Array<number | null>;
   empty: boolean;
 };
 
@@ -125,9 +126,13 @@ export function StatsScreen() {
   const chartDays = shown && span === 365 ? chunk(shown.days, 7).map((group) => group[0]) : (shown?.days ?? []);
   const taskBars = shown ? (span === 365 ? chunk(shown.tasks, 7).map(sumChunk) : shown.tasks) : [];
   const focusBars = shown ? (span === 365 ? chunk(shown.focus, 7).map(sumChunk) : shown.focus) : [];
+  const sleepPoints = shown ? sleepLine(span, shown.sleep) : [];
   const labels = axisLabels(chartDays);
   const taskTitle = span === 365 ? "Tasks completed, by week" : "Tasks completed";
   const focusTitle = span === 365 ? "Focus minutes, by week" : "Focus minutes";
+  const sleepTitle = span === 365 ? "Sleep hours, by week" : "Sleep hours";
+  const sleepAverage = shown ? averageSleep(shown.sleep) : null;
+  const sleepFigure = sleepAverage === null ? "—" : `${formatHours(sleepAverage)} h`;
 
   return (
     <div className="stats-page">
@@ -181,6 +186,7 @@ export function StatsScreen() {
         <div className="stat-charts">
           <LineChart title={taskTitle} values={taskBars} labels={labels} color={TASK_COLOR} />
           <LineChart title={focusTitle} values={focusBars} labels={labels} color={FOCUS_COLOR} />
+          <LineChart title={sleepTitle} values={sleepPoints} labels={labels} color={SLEEP_COLOR} figure={sleepFigure} />
         </div>
       ) : null}
       {load.ready && shown && view === "days" ? (
@@ -373,7 +379,7 @@ function buildBoard(input: {
     focus.every((minutes) => minutes === 0) &&
     snaps.every((snap) => snap.mood === null && snap.sleepHours === null && snap.workout === null);
 
-  return { days, readings, rows, tasks, focus, empty };
+  return { days, readings, rows, tasks, focus, sleep: sleepHours, empty };
 }
 
 function trackerRow(
@@ -537,23 +543,55 @@ function Chart({ title, values, labels, color }: { title: string; values: number
   );
 }
 
-function LineChart({ title, values, labels, color }: { title: string; values: number[]; labels: AxisLabel[]; color: string }) {
-  const max = Math.max(1, ...values);
-  const total = values.reduce((sum, value) => sum + value, 0);
+function LineChart({
+  title,
+  values,
+  labels,
+  color,
+  figure,
+}: {
+  title: string;
+  values: Array<number | null>;
+  labels: AxisLabel[];
+  color: string;
+  figure?: string;
+}) {
+  const numbers = values.filter((value): value is number => value !== null);
+  const max = Math.max(1, ...numbers);
+  const caption = figure ?? String(numbers.reduce((sum, value) => sum + value, 0));
   const width = 640;
   const height = 120;
   const step = values.length === 0 ? 0 : width / values.length;
-  const points = values.map((value, index) => `${step * index + step / 2},${height - 8 - (value / max) * (height - 16)}`).join(" ");
+  const points = values.map((value, index) => {
+    if (value === null) return null;
+    return { x: step * index + step / 2, y: height - 8 - (value / max) * (height - 16) };
+  });
+  const segments: string[] = [];
+  let current: string[] = [];
+  for (const point of points) {
+    if (!point) {
+      if (current.length > 1) segments.push(current.join(" "));
+      current = [];
+      continue;
+    }
+    current.push(`${point.x},${point.y}`);
+  }
+  if (current.length > 1) segments.push(current.join(" "));
   const start = step / 2;
   const end = values.length === 0 ? start : step * (values.length - 1) + step / 2;
   return (
     <section className="panel grid gap-2">
       <h2 className="text-[15px] font-bold">
-        {title} <span className="label">{total}</span>
+        {title} <span className="label">{caption}</span>
       </h2>
       <svg className="stat-line" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={title}>
         <polyline fill="none" stroke="var(--border)" strokeWidth="1" points={`${start},${height - 8} ${end},${height - 8}`} />
-        <polyline fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" points={points} />
+        {segments.map((segment, index) => (
+          <polyline key={index} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" points={segment} />
+        ))}
+        {points.map((point, index) =>
+          point ? <circle key={index} cx={point.x} cy={point.y} r="3" fill={color} /> : null,
+        )}
       </svg>
       <Axis labels={labels} />
     </section>

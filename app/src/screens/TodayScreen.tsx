@@ -5,6 +5,8 @@ import { DayRecord } from "../components/DayRecord";
 import { MonthPicker } from "../components/MonthPicker";
 import { TaskRow } from "../components/TaskRow";
 import { Button } from "../components/Button";
+import { Collapse } from "../components/Collapse";
+import { Presence } from "../lib/motion";
 import { Skeleton, useViewLoad } from "../components/Skeleton";
 import { firstSectionId } from "../db/lists";
 import { loadUnfiredReminders, markFired } from "../db/reminders";
@@ -102,17 +104,19 @@ export function TodayScreen({ date }: { date: string }) {
           <button type="button" className="page-title rounded-lg px-1 py-1 text-left" onClick={() => setPicker((open) => !open)}>
             {formatDay(date)}
           </button>
-          {picker ? (
-            <MonthPicker
-              value={date}
-              weekStart={app.settings.weekStart}
-              onPick={(iso) => {
-                app.goToday(iso);
-                setPicker(false);
-              }}
-              onClose={() => setPicker(false)}
-            />
-          ) : null}
+          <Presence open={picker}>
+            {picker ? (
+              <MonthPicker
+                value={date}
+                weekStart={app.settings.weekStart}
+                onPick={(iso) => {
+                  app.goToday(iso);
+                  setPicker(false);
+                }}
+                onClose={() => setPicker(false)}
+              />
+            ) : null}
+          </Presence>
         </div>
         <Button small aria-label="Next day" onClick={() => app.goToday(addDays(date, 1))}>
           <ChevronRight size={18} aria-hidden />
@@ -138,21 +142,21 @@ export function TodayScreen({ date }: { date: string }) {
                 <span>Completed {groups.completed.length}</span>
                 <span>{completedOpen ? "Hide" : "Show"}</span>
               </button>
-              {completedOpen
-                ? groups.completed.map((task) => (
-                    <TaskRow
-                      key={task.id}
-                      task={task}
-                      lists={app.lists}
-                      clock={app.settings.clock}
-                      selected={task.id === app.cursorId || task.id === app.openTaskId}
-                      done
-                      enter={task.id === enteredId}
-                      onOpen={() => app.setOpenTaskId(task.id)}
-                      onToggle={() => void toggle(task)}
-                    />
-                  ))
-                : null}
+              <Collapse open={completedOpen}>
+                {groups.completed.map((task) => (
+                  <TaskRow
+                    key={task.id}
+                    task={task}
+                    lists={app.lists}
+                    clock={app.settings.clock}
+                    selected={task.id === app.cursorId || task.id === app.openTaskId}
+                    done
+                    enter={task.id === enteredId}
+                    onOpen={() => app.setOpenTaskId(task.id)}
+                    onToggle={() => void toggle(task)}
+                  />
+                ))}
+              </Collapse>
             </div>
           ) : null}
         </section>

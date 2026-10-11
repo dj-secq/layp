@@ -11,7 +11,8 @@ import {
 } from "@layp/shared";
 import { useState } from "react";
 import { Pressable, Text, View, useColorScheme } from "react-native";
-import { colors, ink, primary } from "../theme/colors";
+import { usePaper } from "../theme/theme";
+import { colors, onPrimary, primary } from "../theme/colors";
 import { Choice } from "./choice";
 import { Field } from "./field";
 
@@ -35,6 +36,7 @@ export function RecurrenceEditor({
   onSave: (patch: { recurrence: RecurrenceRule | null; dueOn?: string }) => void;
 }) {
   useColorScheme();
+  usePaper();
   const savedRule = task.recurrenceJson ? parseRule(task.recurrenceJson) : null;
   const source = `${task.id}\0${task.recurrenceJson ?? ""}\0${task.completedAt ?? ""}`;
   const [seen, setSeen] = useState(source);
@@ -103,7 +105,7 @@ export function RecurrenceEditor({
                         opacity: locked ? 0.5 : 1,
                       }}
                     >
-                      <Text style={{ color: on ? ink : colors.label }}>{day.label}</Text>
+                      <Text style={{ color: on ? onPrimary : colors.label }}>{day.label}</Text>
                     </Pressable>
                   );
                 })}
@@ -159,11 +161,11 @@ export function RecurrenceEditor({
               opacity: locked || error !== null ? 0.6 : 1,
             }}
           >
-            <Text style={{ color: ink, fontSize: 17, fontWeight: "600" }}>Save repeat</Text>
+            <Text style={{ color: onPrimary, fontSize: 17, fontWeight: "600" }}>Save repeat</Text>
           </Pressable>
         </>
       )}
-      {error ? <Text style={{ color: ink }}>{error}</Text> : null}
+      {error ? <Text style={{ color: colors.danger }}>{error}</Text> : null}
     </View>
   );
 }

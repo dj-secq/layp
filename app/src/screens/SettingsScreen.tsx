@@ -5,6 +5,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Button } from "../components/Button";
 import { Choice } from "../components/Choice";
 import { Dialog } from "../components/Dialog";
+import { Presence } from "../lib/motion";
 import { useShortcutRegistered } from "../components/DesktopShell";
 import { Field } from "../components/Field";
 import { closeDatabase, databaseFile, openDatabase, query, run } from "../db/client";
@@ -325,6 +326,7 @@ export function PhonePanel({
           ) : null}
         </div>
       ) : null}
+      <Presence open={replaceOpen}>
       {replaceOpen ? (
         <Dialog title="Replace the paired phone?" onClose={onCloseReplace}>
           <p>The current code stops working.</p>
@@ -338,6 +340,8 @@ export function PhonePanel({
           </div>
         </Dialog>
       ) : null}
+      </Presence>
+      <Presence open={forgetOpen}>
       {forgetOpen ? (
         <Dialog title="Forget this phone?" onClose={onCloseForget}>
           <p>The phone keeps the copy it already has and will not receive new rows.</p>
@@ -351,6 +355,7 @@ export function PhonePanel({
           </div>
         </Dialog>
       ) : null}
+      </Presence>
     </section>
   );
 }
@@ -588,6 +593,7 @@ function ArchiveList() {
           </div>
         </div>
       ))}
+      <Presence open={pending !== null}>
       {pending ? (
         <Dialog title="Delete list?" onClose={() => setPending(null)}>
           <p>This permanently deletes {pending.name} and every task on it.</p>
@@ -601,6 +607,7 @@ function ArchiveList() {
           </div>
         </Dialog>
       ) : null}
+      </Presence>
     </section>
   );
 }
@@ -795,6 +802,7 @@ function BackupButtons({ onError, onNotice }: { onError: (message: string) => vo
       <Button variant="secondary" onClick={() => void pickImport(false)}>
         Import file
       </Button>
+      <Presence open={picked !== null}>
       {picked ? (
         <Dialog
           title="Import backup"
@@ -827,6 +835,7 @@ function BackupButtons({ onError, onNotice }: { onError: (message: string) => vo
           </form>
         </Dialog>
       ) : null}
+      </Presence>
     </>
   );
 }
