@@ -13,7 +13,7 @@
   <img src="docs/screenshots/today.png" width="880" alt="Today, with the day's tasks and the day record">
 </p>
 
-Layp is an installed program with its own window. There is no account, no server, and no sync. The database stays on this computer. A backup is a copy of that file.
+Layp is an installed program with its own window. There is no account and no cloud server. Tasks stay in one SQLite file on this computer. A phone on the same Wi-Fi can keep its own copy. A backup is a copy of the desktop file.
 
 ## Screens
 
@@ -69,7 +69,7 @@ The package is written to `app/src-tauri/target/release/bundle/deb/`. The AppIma
 
 ## Develop
 
-Node 22 and a Rust toolchain are required, plus the WebKitGTK and GTK libraries Tauri uses on Linux.
+Node 22 and a Rust toolchain are required, plus the WebKitGTK and GTK libraries Tauri uses on Linux. Install from `app/`, `phone/`, or `shared/`. The repo root is not a package.
 
 ```sh
 cd app
@@ -79,6 +79,19 @@ npm run tauri dev
 ```
 
 `npm run tauri dev` opens the Layp window.
+
+## Phone
+
+The phone app is in `phone/`. It is an Expo development build for a phone on the same Wi-Fi, not a store download.
+
+```sh
+cd phone
+npm install
+npm test
+npx expo start
+```
+
+`android/` and `ios/` are generated and stay out of git. From `phone/`, `npm run android` rebuilds the Android project.
 
 ## License
 

@@ -1,17 +1,51 @@
-# Dependencies and build output
+# Dependencies and build output.
+# Install from app/, phone/, or shared/. The repo root is not a package.
 node_modules/
 dist/
 dist-ssr/
+web-build/
 target/
+coverage/
+*.tsbuildinfo
+/package.json
+/package-lock.json
+/yarn.lock
+/pnpm-lock.yaml
+/bun.lock
+
+# Expo
+.expo/
+expo-env.d.ts
+.metro-health-check*
+/phone/android/
+/phone/ios/
+
+# Native build caches and packages
+**/.gradle/
+**/.kotlin/
+**/.cxx/
+local.properties
+*.apk
+*.aab
+*.ap_
+*.ipa
+*.hprof
+
+# Signing material
+*.jks
+*.keystore
+*.p8
+*.p12
+*.mobileprovision
+*.pem
+*.orig.*
 
 # Tauri regenerates these for capability autocomplete
 app/src-tauri/gen/schemas/
 
-# Plans, notes, and agent instructions stay on this machine.
+# Plans and agent instructions stay on this machine.
 # The public README is the exception.
 /plan/
-*.md
-!/README.md
 AGENTS.md
 CLAUDE.md
 GEMINI.md
@@ -41,19 +75,21 @@ logs/
 *.sqlite
 *.sqlite3
 *.db
+*.db-journal
 
-# TypeScript and Rust scratch
-*.tsbuildinfo
+# Rust scratch
 **/*.rs.bk
 
-# Editors and OS
+# Editors and OS. Extension recommendations are shared. Settings stay local.
 .DS_Store
 Thumbs.db
 .idea/
-.vscode/
+.vscode/*
+!.vscode/extensions.json
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
 *.swp
+*~
