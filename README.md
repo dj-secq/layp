@@ -5,27 +5,41 @@
 <h1 align="center">Layp</h1>
 
 <p align="center">
-  A local desktop planner for Linux.<br>
-  Tasks, a calendar, and a day record in one SQLite file.
+  A local planner for the day, the tasks, and the habits.<br>
+  Linux on the desk. Android on the same Wi-Fi. One SQLite file on each.
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/today.png" width="880" alt="Today, with the day's tasks and the day record">
+  <img src="docs/screenshots/today.png" width="880" alt="Today on the desktop: the day's tasks beside sleep, workout, mood, and a diary line">
 </p>
 
-Layp is an installed program with its own window. There is no account and no cloud server. Tasks stay in one SQLite file on this computer. A phone on the same Wi-Fi can keep its own copy. A backup is a copy of the desktop file.
+Layp is an installed program. There is no account and no cloud server. The desktop keeps its file on that computer. The phone keeps its own copy and syncs while both are open on the same Wi-Fi. A backup is a copy of the file.
+
+The pictures on this page are the desktop. The phone uses the same names.
+
+## Not only a todo list
+
+A todo list ends at the checkbox. Layp keeps the day next to the tasks, and it keeps habits as their own records.
+
+| | A usual todo app | Layp |
+| --- | --- | --- |
+| The day | Tasks that fall on a date | Tasks, plus sleep, workout, mood, and a diary line |
+| Habits | Another list, or a streak you can break | A tracker is a check, a count, or a number. A hobby is minutes you spent, with no daily debt |
+| The year | A calendar of due dates | The same year can show mood, sleep, workout, tasks, or hobby time |
+| Where it lives | An account | A file on the computer. The phone is a second copy, not a login |
+| Repeats | A pile of future copies | The next copy appears when you finish the current one |
+
+<p align="center">
+  <img src="docs/screenshots/year.png" width="880" alt="The year on the desktop, with Mood, Shown up, Sleep, Workout, Tasks, and Hobby">
+</p>
 
 ## Screens
 
 <p align="center">
-  <img src="docs/screenshots/calendar.png" width="880" alt="Calendar">
+  <img src="docs/screenshots/calendar.png" width="880" alt="The desktop calendar, with tasks on their days">
 </p>
 
-<p align="center">
-  <img src="docs/screenshots/year.png" width="880" alt="Year">
-</p>
-
-The sidebar opens on Today, Inbox, Upcoming, and Calendar. Lists and folders sit under those. More holds the rest:
+The sidebar opens on Today, Inbox, Upcoming, and Calendar. Lists and folders sit under those. More holds the rest. The phone opens on Today, Inbox, Calendar, and Focus, and keeps the rest under More.
 
 | Screen | What it is for |
 | --- | --- |
@@ -37,27 +51,32 @@ The sidebar opens on Today, Inbox, Upcoming, and Calendar. Lists and folders sit
 | Matrix | Important and urgent |
 | Timeline | The week as columns |
 | Month | The month spread and the day page |
-| Year | The year, a day at a time |
-| Trackers | Checks and counts you keep |
+| Year | The year, a day at a time, for mood, sleep, workout, tasks, or a hobby |
+| Trackers | Checks, counts, and numbers you keep |
 | Hobbies | Time spent, not a daily debt |
 | Focus | A work timer and a break |
 | Stats | Bars, a line, or a notebook, for 7, 28, or 365 days |
-| Settings | Theme, clock, tray, backup, and About |
+| Countdowns | A date you are counting toward |
+| Settings | Theme, clock, tray, backup, the phone link, and About |
 
 Type a task in the sidebar field. `call mom tomorrow 9am` sets the title, the day, and the time. The question mark next to the field lists the words Layp understands.
 
 ## Install
 
-The desktop package and the phone APK are attached to the [0.2.0 release](https://github.com/dj-secq/layp/releases/tag/v0.2.0).
+The desktop package is attached to the [0.2.0 release](https://github.com/dj-secq/layp/releases/tag/v0.2.0).
 
 ```sh
 curl -LO https://github.com/dj-secq/layp/releases/download/v0.2.0/Layp_0.2.0_amd64.deb
 sudo apt install ./Layp_0.2.0_amd64.deb
 ```
 
-Installing it adds Layp to the app menu. The package is section `utils`, priority `optional`. The desktop entry is a Productivity app. Its keywords are tasks, planner, calendar, journal, todo, and focus.
+Installing it adds Layp to the app menu. The package is section `utils`, priority `optional`. The desktop entry is a Productivity app. Its keywords are tasks, planner, calendar, journal, habits, trackers, todo, and focus.
 
-Build the package from this repo:
+`Layp_0.2.0_amd64.AppImage` on the same release is the program without a package install.
+
+The phone APK is not on that release yet. Until it is, the phone app is the project in `phone/`.
+
+Build the desktop package from this repo:
 
 ```sh
 cd app
@@ -82,9 +101,7 @@ npm run tauri dev
 
 ## Phone
 
-The phone APK on the 0.2.0 release is an arm64 Android package. Install it from the file manager. It is signed with its own key, so a development build of Layp has to be uninstalled first.
-
-The phone project is in `phone/`. `npx expo start` is the development build, for a phone on the same Wi-Fi. It is not a store download.
+The phone is the same planner: tasks, the day record, trackers, hobbies, focus, and the calendar. It does not need a store account. Pair it once from Settings on the desktop. After that, edits sync while both apps are open on the same Wi-Fi.
 
 ```sh
 cd phone
@@ -93,7 +110,7 @@ npm test
 npx expo start
 ```
 
-`android/` and `ios/` are generated and stay out of git. From `phone/`, `npm run android` rebuilds the Android project.
+`android/` and `ios/` are generated and stay out of git. From `phone/`, `npm run android` rebuilds the Android project. Settings on the phone has the same About text, plus export and import of the phone's own copy.
 
 ## License
 

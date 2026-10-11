@@ -35,8 +35,8 @@
     "license": "MIT",
     "licenseFile": "../../LICENSE",
     "category": "Productivity",
-    "shortDescription": "Local tasks and a day record",
-    "longDescription": "Layp is a desktop planner. Tasks, a calendar, and a day record stay in one SQLite file on this computer.",
+    "shortDescription": "Local tasks, habits, and a day record",
+    "longDescription": "Layp is a desktop planner. Tasks, trackers, hobbies, and a day record stay in one SQLite file on this computer. A phone on the same Wi-Fi can keep its own copy.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

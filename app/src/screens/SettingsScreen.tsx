@@ -480,7 +480,9 @@ function AboutLayp() {
     <section className="settings-group">
       <h2 className="page-title">About</h2>
       <p>Layp {version}</p>
-      <p>Local tasks and a day record, kept in one file on this computer. MIT License.</p>
+      <p>The day sits next to the tasks. Sleep, a workout, a mood, and a diary line stay with what is due.</p>
+      <p>Trackers are the checks and counts. Hobbies are minutes you spent, not a streak you owe.</p>
+      <p>One file on this computer. A phone on the same Wi-Fi keeps its own copy. MIT License.</p>
     </section>
   );
 }

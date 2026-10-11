@@ -14,6 +14,7 @@ import { colors, ink } from "@/theme/colors";
 import { papers, themeNames, type ThemeName } from "@/theme/paper";
 import { usePaper, usePhoneSettings } from "@/theme/theme";
 import { clampPomoMinutes, focusSounds, type FocusSound, type Tag } from "@layp/shared";
+import Constants from "expo-constants";
 import { Redirect, Stack } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
@@ -217,6 +218,15 @@ export function SettingsScreen() {
           })();
         }}
       />
+
+      <Text style={{ color: colors.label, fontSize: 22, fontWeight: "600" }}>About</Text>
+      <Text selectable style={{ color: colors.label, fontSize: 16 }}>Layp {Constants.expoConfig?.version ?? "0.2.0"}</Text>
+      <Text style={{ color: colors.label, fontSize: 16 }}>
+        The day sits next to the tasks. Sleep, a workout, a mood, and a diary line stay with what is due. Trackers are the checks and counts. Hobbies are minutes you spent, not a streak you owe.
+      </Text>
+      <Text style={{ color: colors.label, fontSize: 16 }}>
+        This phone keeps its own copy and syncs with the computer on the same Wi-Fi. MIT License.
+      </Text>
     </ScreenScroll>
   );
 }
