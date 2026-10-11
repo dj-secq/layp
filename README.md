@@ -74,7 +74,7 @@ Installing it adds Layp to the app menu. The package is section `utils`, priorit
 
 `Layp_0.2.0_amd64.AppImage` on the same release is the program without a package install.
 
-The phone APK is not on that release yet. Until it is, the phone app is the project in `phone/`.
+The phone file on the same release is `Layp-0.2.0.apk`. It is an arm64 Android package. Install it from the file manager. It is signed with its own key, so uninstall a development build of Layp first. The installed phone app does not need the computer's dev server.
 
 Build the desktop package from this repo:
 
